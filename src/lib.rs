@@ -72,7 +72,7 @@ impl HashLife {
         let br_corner = (left + width as i64, top + height as i64);
         let rect = (tl_corner, br_corner);
 
-        self.insert_rect(input, tl_corner, rect, n)
+        self.insert_rect(input, (0, 0), rect, n)
     }
 
     pub fn insert_rect(
@@ -107,7 +107,6 @@ impl HashLife {
         match self.parent_cell.get(&children) {
             None => {
                 let idx = self.macrocells.len();
-                //dbg!(idx, n, children);
                 self.macrocells.push(MacroCell {
                     n,
                     children,
@@ -246,22 +245,22 @@ impl HashLife {
         let (width, height) = rect_dimensions(rect);
         let mut data = vec![false; (width * height) as usize];
         self.raster_rec((0, 0), &mut data, rect, root);
+
         data
     }
 
     /// Recursively create a raster image
-    fn raster_rec(&self, corner: Coord, image: &mut [bool], rect: Rect, handle: Handle) {
-        let cell = self.macrocells[handle.0];
-        let quadrants = cell.children;
-        //dbg!(cell.n);
-        debug_assert_ne!(cell.n, 0);
-
-        if handle.0 == 0 || zero_input(corner, cell.n, rect) {
+    fn raster_rec(&self, corner: Coord, image: &mut [bool], rect: Rect, Handle(idx): Handle) {
+        // Check if the output is gauranteed to be zero
+        if idx == 0 {
             return;
         }
 
+        let cell = self.macrocells[idx];
+        debug_assert_ne!(cell.n, 0);
+
         if cell.n == 1 {
-            for (pos, Handle(val)) in subcoords(corner, 0).into_iter().zip(quadrants) {
+            for (pos, Handle(val)) in subcoords(corner, 0).into_iter().zip(cell.children) {
                 if let Some(idx) = sample_rect(pos, rect) {
                     image[idx] = match val {
                         0 => false,
@@ -271,14 +270,14 @@ impl HashLife {
                 }
             }
         } else {
-            for (sub_corner, node) in subcoords(corner, cell.n - 1).into_iter().zip(quadrants) {
+            for (sub_corner, node) in subcoords(corner, cell.n - 1).into_iter().zip(cell.children) {
                 self.raster_rec(sub_corner, image, rect, node);
             }
         }
     }
 }
 
-/// Calculates whether or not this square can be anything other than zero, given the input rect
+/// Calculates whether or not this square at `coord` of size `2^n` at time `2^(n - 1)` can be anything other than zero, given the input rect
 fn zero_input(coord: Coord, n: usize, input_rect: Rect) -> bool {
     if n == 0 {
         return false;
@@ -299,12 +298,12 @@ fn inside_rect((x, y): Coord, ((x1, y1), (x2, y2)): Rect) -> bool {
     x >= x1 && x < x2 && y >= y1 && y < y2
 }
 
-/// Sample at `pos` from the given `input` buffer positioned at `rect`
+/// Calculate the row-major offset of the given `pos` inside the given `rect`, or return None if
+/// out of bounds.
 fn sample_rect(pos @ (x, y): Coord, rect @ ((x1, y1), (x2, _)): Rect) -> Option<usize> {
-    // debug_assert_eq!(input.len(), (x2 - x1) * (y2 - y1)) // TODO:
     inside_rect(pos, rect).then(|| {
         let (dx, dy) = (x - x1, y - y1);
-        let width = x2 - x1; // Plus one since the rect is inclusive
+        let width = x2 - x1;
         (dx + dy * width) as usize
     })
 }
@@ -362,7 +361,7 @@ fn gol_rules(center: bool, neighbors: usize) -> bool {
 }
 
 /// Returns the (width, height) of the given rect
-fn rect_dimensions(((x1, y1), (x2, y2)): Rect) -> (i64, i64) {
+pub fn rect_dimensions(((x1, y1), (x2, y2)): Rect) -> (i64, i64) {
     (x2 - x1, y2 - y1)
 }
 

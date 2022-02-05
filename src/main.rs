@@ -26,18 +26,19 @@ fn main() -> Result<()> {
 
     let max_rle_dim = rle_height.max(rle_width);
     let n = args.steps;//highest_pow_2(max_rle_dim as _);
-    dbg!(n);
 
     let mut life = HashLife::new();
     let side_len_half = 1 << n - 1;
 
-    let insert_corner = (1 << n) - (1 << (n - 1));
-    let handle = life.insert_array(&rle, rle_width, (side_len_half, side_len_half), n as _);
+    let handle = life.insert_array(&rle, rle_width, (5, 5), n as _);
 
-    let raster = life.raster(handle, ((0, 0), (1<<n, 1<<n)));
+    let view_rect = ((0, 0), (1 << n, 1 << n));
+    let raster = life.raster(handle, view_rect);
+
+    let (view_width, _) = mashlife::rect_dimensions(view_rect);
 
     let pixels = cells_to_pixels(&raster);
-    mashlife::io::write_ppm(args.outfile, &pixels, 1<<n).context("Writing image")?;
+    mashlife::io::write_ppm(args.outfile, &pixels, view_width as _).context("Writing image")?;
 
     Ok(())
 }
