@@ -1,3 +1,5 @@
+pub mod io;
+
 use std::collections::HashMap;
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
