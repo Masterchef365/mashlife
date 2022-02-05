@@ -1,7 +1,7 @@
+use anyhow::{Context, Result};
+use mashlife::HashLife;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use anyhow::{Result, Context};
-use mashlife::HashLife;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "MashLife", about = "Mashes life")]
@@ -9,7 +9,6 @@ struct Opt {
     /// Load an RLE file
     rle: PathBuf,
     // #[structopt(short = "r", long = "rle")]
-
     /// Number of steps to advance
     #[structopt(short, long, default_value = "8")]
     steps: usize,
@@ -33,24 +32,26 @@ fn main() -> Result<()> {
 
     let handle = life.insert_array(&rle, rle_width, (side_len_half, side_len_half), n as _);
 
-    /*
     let raster = life.raster(handle, ((0, 0), (side_len_half, side_len_half)));
-    
+
     let pixels = cells_to_pixels(&raster);
     mashlife::io::write_ppm(args.outfile, &pixels, side_len_half as _).context("Writing image")?;
-    */
 
     Ok(())
 }
 
 fn cells_to_pixels(cells: &[bool]) -> Vec<u8> {
-    cells.iter().map(|&b| [b as u8 * 255; 3]).flatten().collect()
+    cells
+        .iter()
+        .map(|&b| [b as u8 * 255; 3])
+        .flatten()
+        .collect()
 }
 
 /// Returns the ceiling of logbase 2 of the given integer
 fn highest_pow_2(mut v: u64) -> u32 {
     let mut i = 0;
-    for bit in 0..u64::BITS-1 {
+    for bit in 0..u64::BITS - 1 {
         if v & 1 != 0 {
             i = bit + 1;
         }

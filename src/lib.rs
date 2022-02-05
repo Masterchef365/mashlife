@@ -31,17 +31,17 @@ impl HashLife {
     pub fn new() -> Self {
         Self {
             // Zero always yields zero
-            parent_cell: [([Handle(0); 4], Handle(0))].into_iter().collect(),
+            parent_cell: Default::default(),
             macrocells: vec![
                 MacroCell {
-                    n: 0,
-                    children: [Handle(0); 4],
-                    result: Some(Handle(0)),
+                    n: usize::MAX,
+                    children: [Handle(usize::MAX); 4],
+                    result: None,
                 },
                 MacroCell {
-                    n: 0,
+                    n: usize::MAX,
                     children: [Handle(usize::MAX); 4],
-                    result: Some(Handle(usize::MAX)),
+                    result: None,
                 },
             ],
         }
@@ -107,6 +107,7 @@ impl HashLife {
         match self.parent_cell.get(&children) {
             None => {
                 let idx = self.macrocells.len();
+                dbg!(idx, n, children);
                 self.macrocells.push(MacroCell {
                     n,
                     children,
@@ -252,6 +253,7 @@ impl HashLife {
     fn raster_rec(&self, corner: Coord, buf: &mut [bool], rect: Rect, handle: Handle) {
         let cell = self.macrocells[handle.0];
         let quadrants = cell.children;
+        dbg!(cell.n);
         debug_assert_ne!(cell.n, 0);
 
         if zero_input(corner, cell.n, rect) {
