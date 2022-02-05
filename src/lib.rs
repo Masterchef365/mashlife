@@ -239,6 +239,42 @@ impl HashLife {
             .children
             .map(|Handle(child)| self.macrocells[child].children)
     }
+
+    /// Create a raster 
+    pub fn raster(&self, root: Handle, rect: Rect) -> Vec<bool> {
+        let (width, height) = rect_dimensions(rect);
+        let mut data = vec![false; (width * height) as usize];
+        self.raster_rec((0, 0), &mut data, rect, root);
+        data
+    }
+
+    /// Recursively create a raster image
+    fn raster_rec(&self, corner: Coord, buf: &mut [bool], rect: Rect, handle: Handle) {
+        let cell = self.macrocells[handle.0];
+        let quadrants = cell.children;
+        debug_assert_ne!(cell.n, 0);
+
+        if zero_input(corner, cell.n, rect) {
+            return;
+        }
+
+        if cell.n == 1 {
+            for (pos, Handle(val)) in subcoords(corner, 0).into_iter().zip(quadrants) {
+                if let Some(idx) = sample_rect(pos, rect) {
+                    buf[idx] = match val {
+                        0 => false,
+                        1 => true,
+                        other => panic!("N = 1 but {} is not a bit!", other),
+                    };
+                }
+            }
+        } else {
+            for (sub_corner, node) in subcoords(corner, cell.n - 1).into_iter().zip(quadrants) {
+                self.raster_rec(sub_corner, buf, rect, node);
+            }
+        }
+    }
+
 }
 
 /// Calculates whether or not this square can be anything other than zero, given the input rect
@@ -322,6 +358,11 @@ fn gol_rules(center: bool, neighbors: usize) -> bool {
         (false, n) if (n == 3) => true,
         _ => false,
     }
+}
+
+/// Returns the (width, height) of the given rect
+fn rect_dimensions(((x1, y1), (x2, y2)): Rect) -> (i64, i64) {
+    (x2 - x1, y2 - y1)
 }
 
 #[cfg(test)]
