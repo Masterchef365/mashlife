@@ -53,8 +53,8 @@ impl HashLife {
     pub fn insert_array(
         &mut self,
         input: &[bool],
-        tl_corner: Coord,
         width: usize,
+        tl_corner: Coord,
         n: usize,
     ) -> Handle {
         // Calculate height
