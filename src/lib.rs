@@ -31,12 +31,12 @@ impl HashLife {
     pub fn new() -> Self {
         Self {
             // Zero always yields zero
-            parent_cell: Default::default(),
+            parent_cell: [([Handle(0); 4], Handle(0))].into_iter().collect(),
             macrocells: vec![
                 MacroCell {
                     n: usize::MAX,
-                    children: [Handle(usize::MAX); 4],
-                    result: None,
+                    children: [Handle(0); 4],
+                    result: Some(Handle(0)),
                 },
                 MacroCell {
                     n: usize::MAX,
@@ -100,14 +100,14 @@ impl HashLife {
         let children = subcoords(tl_corner, n - 1)
             .map(|sub_corner| self.insert_rect(input, sub_corner, rect, n - 1));
 
-        self.insert_cell(children, n - 1)
+        self.insert_cell(children, n)
     }
 
     fn insert_cell(&mut self, children: SubCells, n: usize) -> Handle {
         match self.parent_cell.get(&children) {
             None => {
                 let idx = self.macrocells.len();
-                dbg!(idx, n, children);
+                //dbg!(idx, n, children);
                 self.macrocells.push(MacroCell {
                     n,
                     children,
@@ -195,7 +195,7 @@ impl HashLife {
             .map(|subcells| self.insert_cell(subcells, cell.n - 1));
 
             /*
-            Compute results or passthroughs for grandchild nodes 
+            Compute results or passthroughs for grandchild nodes
             | Q R S |
             | T U V |
             | W X Y |
@@ -207,7 +207,7 @@ impl HashLife {
                 middle_3x3.map(|handle| self.result(handle, steps, grandchild_step_pow))
             };
 
-            // Get the middle four quadrants of the 3x3 above 
+            // Get the middle four quadrants of the 3x3 above
             let middle_2x2 = [[q, r, t, u], [r, s, u, v], [t, u, w, x], [u, v, x, y]]
                 .map(|subcells| self.insert_cell(subcells, cell.n - 1));
 
@@ -241,7 +241,7 @@ impl HashLife {
             .map(|Handle(child)| self.macrocells[child].children)
     }
 
-    /// Create a raster 
+    /// Create a raster
     pub fn raster(&self, root: Handle, rect: Rect) -> Vec<bool> {
         let (width, height) = rect_dimensions(rect);
         let mut data = vec![false; (width * height) as usize];
@@ -250,20 +250,20 @@ impl HashLife {
     }
 
     /// Recursively create a raster image
-    fn raster_rec(&self, corner: Coord, buf: &mut [bool], rect: Rect, handle: Handle) {
+    fn raster_rec(&self, corner: Coord, image: &mut [bool], rect: Rect, handle: Handle) {
         let cell = self.macrocells[handle.0];
         let quadrants = cell.children;
-        dbg!(cell.n);
+        //dbg!(cell.n);
         debug_assert_ne!(cell.n, 0);
 
-        if zero_input(corner, cell.n, rect) {
+        if handle.0 == 0 || zero_input(corner, cell.n, rect) {
             return;
         }
 
         if cell.n == 1 {
             for (pos, Handle(val)) in subcoords(corner, 0).into_iter().zip(quadrants) {
                 if let Some(idx) = sample_rect(pos, rect) {
-                    buf[idx] = match val {
+                    image[idx] = match val {
                         0 => false,
                         1 => true,
                         other => panic!("N = 1 but {} is not a bit!", other),
@@ -272,11 +272,10 @@ impl HashLife {
             }
         } else {
             for (sub_corner, node) in subcoords(corner, cell.n - 1).into_iter().zip(quadrants) {
-                self.raster_rec(sub_corner, buf, rect, node);
+                self.raster_rec(sub_corner, image, rect, node);
             }
         }
     }
-
 }
 
 /// Calculates whether or not this square can be anything other than zero, given the input rect
