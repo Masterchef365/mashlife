@@ -31,7 +31,8 @@ fn main() -> Result<()> {
     let mut life = HashLife::new();
     let side_len_half = 1 << n - 1;
 
-    let handle = life.insert_array(&rle, rle_width, (0, 0), n as _);
+    let insert_corner = (1 << n) - (1 << (n - 1));
+    let handle = life.insert_array(&rle, rle_width, (side_len_half, side_len_half), n as _);
 
     let raster = life.raster(handle, ((0, 0), (1<<n, 1<<n)));
 

@@ -69,7 +69,7 @@ impl HashLife {
 
         // Calculate input rect
         let (top, left) = tl_corner;
-        let br_corner = (top + height as i64, left + width as i64);
+        let br_corner = (left + width as i64, top + height as i64);
         let rect = (tl_corner, br_corner);
 
         self.insert_rect(input, tl_corner, rect, n)
@@ -79,18 +79,18 @@ impl HashLife {
         &mut self,
         input: &[bool],
         tl_corner: Coord,
-        rect: Rect,
+        input_rect: Rect,
         n: usize,
     ) -> Handle {
         // Short circuit for zeroes
-        if zero_input(tl_corner, n, rect) {
+        if zero_input(tl_corner, n, input_rect) {
             return Handle(0);
         }
 
         // Return the input pixel at the given coordinates
         if n == 0 {
             return Handle(
-                sample_rect(tl_corner, rect)
+                sample_rect(tl_corner, input_rect)
                     .map(|idx| input[idx])
                     .unwrap_or(false) as usize,
             );
@@ -98,7 +98,7 @@ impl HashLife {
 
         // Calculate which macrocell we are in
         let children = subcoords(tl_corner, n - 1)
-            .map(|sub_corner| self.insert_rect(input, sub_corner, rect, n - 1));
+            .map(|sub_corner| self.insert_rect(input, sub_corner, input_rect, n - 1));
 
         self.insert_cell(children, n)
     }
