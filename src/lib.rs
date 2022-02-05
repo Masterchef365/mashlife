@@ -118,8 +118,15 @@ impl HashLife {
         }
     }
 
-    /// Returns the given macro`cell` advanced by the given number of `steps`, with
-    pub fn result(&mut self, handle: Handle, steps: u128) -> Handle {
+    /// Returns the given macro`cell` advanced by the given number of `steps`
+    pub fn calc_result(&mut self, handle: Handle, steps: u128) -> Handle {
+        let cell = self.macrocells[handle.0];
+        self.result(handle, steps, cell.n)
+    }
+
+    /// Returns the given macro`cell` advanced by the given number of `steps`, with the current
+    /// power-of-two step denoted by step
+    fn result(&mut self, handle: Handle, steps: u128, step_pow: usize) -> Handle {
         let cell = self.macrocells[handle.0];
         assert!(
             cell.n >= 2,
@@ -127,30 +134,30 @@ impl HashLife {
         );
 
         // Check status of child cells
-        let child_n = cell.n - 1;
-        let skip_children = steps >> child_n & 1 == 0;
+        let child_step_pow = step_pow - 1;
+        let skip_children = steps >> child_step_pow & 1 == 0;
 
-        let grandchild_n = child_n - 1;
-        let skip_grandchildren = steps >> grandchild_n & 1 == 0;
+        let grandchild_step_pow = child_step_pow - 1;
+        let skip_grandchildren = steps >> grandchild_step_pow & 1 == 0;
 
         // Check if we already know the result
         // If we might skip one time step, we can't use the cached result because it's comprised of
         // two 2^(n-3) time steps
-        if skip_children || skip_grandchildren {
+        if !(skip_children || skip_grandchildren) {
             if let Some(result) = cell.result {
                 return result;
             }
         }
 
-        // Solve 4x4 if we're at n = 2 (so children are n - 1 = 1)
+        // Solve 4x4 if we're at n = 2
         // Skip if the relevant bit is set
-        if child_n == 1 {
+        if cell.n == 2 {
             self.insert_cell(
-                match skip_grandchildren {
+                match skip_children {
                     true => self.center_passthrough(handle),
                     false => solve_4x4(self.subcells(handle)),
                 },
-                child_n,
+                cell.n - 1,
             )
         } else {
             /*
@@ -168,8 +175,48 @@ impl HashLife {
                 br @ [m, n, o, _] // Bottom right
             ] = self.subcells(handle);
 
-            //self.insert_cell()
-            todo!()
+            let middle_3x3 = [
+                // Top inner row
+                tl,
+                [b, e, d, g],
+                tr,
+                // Middle inner row
+                [c, d, i, j],
+                [d, g, j, m],
+                [g, h, m, n],
+                // Bottom inner row
+                bl,
+                [j, m, l, o],
+                br,
+            ]
+            .map(|subcells| self.insert_cell(subcells, cell.n - 1));
+
+            /*
+            Compute results or passthroughs for grandchild nodes 
+            | Q R S |
+            | T U V |
+            | W X Y |
+            */
+            let [q, r, s, t, u, v, w, x, y] = if skip_grandchildren {
+                middle_3x3
+                    .map(|handle| self.insert_cell(self.center_passthrough(handle), cell.n - 1))
+            } else {
+                middle_3x3.map(|handle| self.result(handle, steps, grandchild_step_pow))
+            };
+
+            // Get the middle four quadrants of the 3x3 above 
+            let middle_2x2 = [[q, r, t, u], [r, s, u, v], [t, u, w, x], [u, v, x, y]]
+                .map(|subcells| self.insert_cell(subcells, cell.n - 1));
+
+            // Compute results or passthroughs for child nodes
+            let result = if skip_children {
+                middle_2x2
+                    .map(|handle| self.insert_cell(self.center_passthrough(handle), cell.n - 1))
+            } else {
+                middle_2x2.map(|handle| self.result(handle, steps, child_step_pow))
+            };
+
+            self.insert_cell(result, cell.n - 1)
         }
     }
 
@@ -233,11 +280,6 @@ fn subcoords((x, y): Coord, n: usize) -> [Coord; 4] {
         (x, y + side_len),
         (x + side_len, y + side_len),
     ]
-}
-
-/// Returns the (width, height) of the given rect
-fn rect_dimensions(((x1, y1), (x2, y2)): Rect) -> (i64, i64) {
-    (x2 - x1, y2 - y1)
 }
 
 /// Increase the width of the rect on all sides by `w`
