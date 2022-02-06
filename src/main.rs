@@ -11,7 +11,7 @@ struct Opt {
     // #[structopt(short = "r", long = "rle")]
     /// Number of steps to advance
     #[structopt(short, long, default_value = "8")]
-    steps: usize,
+    steps: u128,
 
     /// Output file path
     #[structopt(short, long, default_value = "out.ppm")]
@@ -26,17 +26,20 @@ fn main() -> Result<()> {
     let rle_height = rle.len() / rle_width;
 
     let max_rle_dim = rle_height.max(rle_width);
-    let n = args.steps;//highest_pow_2(max_rle_dim as _);
+    let n = highest_pow_2(max_rle_dim as _).max(highest_pow_2(args.steps as _) + 2);
+
+    dbg!(n);
+    dbg!(args.steps);
 
     // Create simulation
     let mut life = HashLife::new();
-    let side_len_half = 1 << n - 1;
 
     // Insert RLE
-    let handle = life.insert_array(&rle, rle_width, (5, 5), n as _);
+    let center = 1 << n - 1;
+    let handle = life.insert_array(&rle, rle_width, (center, center), n as _);
 
     // Calculate result
-    let handle = life.calc_result(handle, u128::MAX);
+    let handle = life.result(handle, args.steps);
 
     // Rasterize result
     let view_rect = ((0, 0), (1 << n, 1 << n));

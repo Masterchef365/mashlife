@@ -122,46 +122,42 @@ impl HashLife {
 
     /// Returns the given macro`cell` advanced by the given number of `steps` (up to and including
     /// 2^(n-2) where 2^n is the width of the cell
-    pub fn calc_result(&mut self, handle: Handle, steps: u128) -> Handle {
-        let cell = self.macrocells[handle.0];
-        self.result(handle, steps, cell.n)
-    }
+    pub fn result(&mut self, handle: Handle, steps: u128) -> Handle {
+        // Fast-path for zeroes
+        if handle.0 == 0 {
+            return handle;
+        }
 
-    /// Returns the given macro`cell` advanced by the given number of `steps`, with the current
-    /// power-of-two step denoted by step
-    fn result(&mut self, handle: Handle, steps: u128, step_pow: usize) -> Handle {
         let cell = self.macrocells[handle.0];
+
         assert!(
             cell.n >= 2,
             "Results can only be computed for 4x4 cells and larger"
         );
 
         // Check status of child cells
-        let child_step_pow = step_pow - 1;
-        let skip_children = steps >> child_step_pow & 1 == 0;
+        let mut skip = true;
+        for i in 0..=cell.n {
+            skip &= (steps >> i) & 1 == 0;
+            //dbg!(i);
+        }
 
-        let grandchild_step_pow = child_step_pow - 1;
-        let skip_grandchildren = steps >> grandchild_step_pow & 1 == 0;
+        if skip {
+            dbg!(cell.n, steps, skip);
+            return self.insert_cell(self.center_passthrough(handle), cell.n - 1);
+        }
 
         // Check if we already know the result
         // If we might skip one time step, we can't use the cached result because it's comprised of
         // two 2^(n-3) time steps
-        if !(skip_children || skip_grandchildren) {
-            if let Some(result) = cell.result {
-                return result;
-            }
+        if let Some(result) = cell.result {
+            return result;
         }
 
         // Solve 4x4 if we're at n = 2
         // Skip if the relevant bit is set
         if cell.n == 2 {
-            self.insert_cell(
-                match skip_children {
-                    true => self.center_passthrough(handle),
-                    false => solve_4x4(self.subcells(handle)),
-                },
-                cell.n - 1,
-            )
+            self.insert_cell(solve_4x4(self.subcells(handle)), cell.n - 1)
         } else {
             /*
             Deconstruct the quadrants of the macrocell, like so:
@@ -200,26 +196,23 @@ impl HashLife {
             | T U V |
             | W X Y |
             */
-            let [q, r, s, t, u, v, w, x, y] = if skip_grandchildren {
-                middle_3x3
-                    .map(|handle| self.insert_cell(self.center_passthrough(handle), cell.n - 1))
-            } else {
-                middle_3x3.map(|handle| self.result(handle, steps, grandchild_step_pow))
-            };
+            let [q, r, s, t, u, v, w, x, y] =
+                middle_3x3.map(|handle| self.result(handle, u128::MAX));
 
             // Get the middle four quadrants of the 3x3 above
             let middle_2x2 = [[q, r, t, u], [r, s, u, v], [t, u, w, x], [u, v, x, y]]
                 .map(|subcells| self.insert_cell(subcells, cell.n - 1));
 
             // Compute results or passthroughs for child nodes
-            let result = if skip_children {
-                middle_2x2
-                    .map(|handle| self.insert_cell(self.center_passthrough(handle), cell.n - 1))
-            } else {
-                middle_2x2.map(|handle| self.result(handle, steps, child_step_pow))
-            };
+            let result = middle_2x2.map(|handle| self.result(handle, u128::MAX));
 
-            self.insert_cell(result, cell.n - 1)
+            // Save the result
+            let result = self.insert_cell(result, cell.n - 1);
+
+            // Assign the result of the cell we computed so we don't have to do so again!
+            self.macrocells[handle.0].result = Some(result);
+
+            result
         }
     }
 
