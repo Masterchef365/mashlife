@@ -136,15 +136,12 @@ impl HashLife {
         );
 
         // Check status of child cells
-        let mut skip = true;
-        for i in 0..=cell.n {
-            skip &= (steps >> i) & 1 == 0;
-            //dbg!(i);
-        }
+        let skip = (steps >> cell.n) & 1 == 0;
 
         if skip {
             dbg!(cell.n, steps, skip);
-            return self.insert_cell(self.center_passthrough(handle), cell.n - 1);
+            let passthrough = self.center_passthrough(handle, steps);
+            return self.insert_cell(passthrough, cell.n - 1);
         }
 
         // Check if we already know the result
@@ -217,14 +214,14 @@ impl HashLife {
     }
 
     /// Get the center 4 cells of the given cell
-    fn center_passthrough(&self, handle: Handle) -> SubCells {
+    fn center_passthrough(&mut self, handle: Handle, steps: u128) -> SubCells {
         let [
             [_, _, _, d], // Top left
             [_, _, g, _], // Top right
             [_, j, _, _], // Bottom left
             [m, _, _, _] // Bottom right
         ] = self.subcells(handle);
-        [d, g, j, m]
+        [d, g, j, m].map(|h| self.result(h, steps))
     }
 
     /// Children of the children of the given handle
