@@ -120,7 +120,8 @@ impl HashLife {
         }
     }
 
-    /// Returns the given macro`cell` advanced by the given number of `steps`
+    /// Returns the given macro`cell` advanced by the given number of `steps` (up to and including
+    /// 2^(n-2) where 2^n is the width of the cell
     pub fn calc_result(&mut self, handle: Handle, steps: u128) -> Handle {
         let cell = self.macrocells[handle.0];
         self.result(handle, steps, cell.n)

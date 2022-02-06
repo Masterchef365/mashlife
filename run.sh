@@ -1,1 +1,1 @@
-cargo run -- $@ && feh --force-aliasing -Z out.ppm 
+cargo run --release -- $@ && feh --force-aliasing -Z out.ppm 

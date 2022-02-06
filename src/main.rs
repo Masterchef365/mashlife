@@ -21,20 +21,28 @@ struct Opt {
 fn main() -> Result<()> {
     let args = Opt::from_args();
 
+    // Load RLE
     let (rle, rle_width) = mashlife::io::load_rle(args.rle).context("Failed to load RLE file")?;
     let rle_height = rle.len() / rle_width;
 
     let max_rle_dim = rle_height.max(rle_width);
     let n = args.steps;//highest_pow_2(max_rle_dim as _);
 
+    // Create simulation
     let mut life = HashLife::new();
     let side_len_half = 1 << n - 1;
 
+    // Insert RLE
     let handle = life.insert_array(&rle, rle_width, (5, 5), n as _);
 
+    // Calculate result
+    let handle = life.calc_result(handle, u128::MAX);
+
+    // Rasterize result
     let view_rect = ((0, 0), (1 << n, 1 << n));
     let raster = life.raster(handle, view_rect);
 
+    // Write image
     let (view_width, _) = mashlife::rect_dimensions(view_rect);
 
     let pixels = cells_to_pixels(&raster);
