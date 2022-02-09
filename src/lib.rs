@@ -158,13 +158,13 @@ impl HashLife {
             let dt_2 = dt.checked_sub(sub_step_dt).unwrap_or(0);
 
             /*
-               Deconstruct the quadrants of the macrocell, like so:
-               | _ B | E _ |
-               | C D | G H |
-               +-----+-----+
-               | I J | M N |
-               | _ L | O _ |
-               */
+            Deconstruct the quadrants of the macrocell, like so:
+            | _ B | E _ |
+            | C D | G H |
+            +-----+-----+
+            | I J | M N |
+            | _ L | O _ |
+            */
             let [
                 tl @ [_, b, c, d], // Top left
                 tr @ [e, _, g, h], // Top right
@@ -186,14 +186,14 @@ impl HashLife {
                 [j, m, l, o],
                 br,
             ]
-                .map(|subcells| self.insert_cell(subcells, cell_n - 1));
+            .map(|subcells| self.insert_cell(subcells, cell_n - 1));
 
             /*
-               Compute results or passthroughs for grandchild nodes
-               | Q R S |
-               | T U V |
-               | W X Y |
-               */
+            Compute results or passthroughs for grandchild nodes
+            | Q R S |
+            | T U V |
+            | W X Y |
+            */
 
             let [q, r, s, t, u, v, w, x, y] = middle_3x3.map(|handle| self.result(handle, dt_1));
 
@@ -374,32 +374,32 @@ mod tests {
         assert_eq!(
             solve_4x4([
                 [
-                0, 0, //.
-                1, 0 //.
+                    0, 0, //.
+                    1, 0 //.
                 ]
                 .map(Handle),
                 [
-                1, 0, //.
-                1, 0, //.
+                    1, 0, //.
+                    1, 0, //.
                 ]
                 .map(Handle),
-                [
-                0, 1, //.
-                0, 0, //.
-                ]
-                .map(Handle),
-                [
-                1, 0, //.
-                0, 0, //.
-                ]
-                .map(Handle)
-                ]),
                 [
                     0, 1, //.
-                    1, 1, //.
+                    0, 0, //.
                 ]
-                    .map(Handle)
-                    );
+                .map(Handle),
+                [
+                    1, 0, //.
+                    0, 0, //.
+                ]
+                .map(Handle)
+            ]),
+            [
+                0, 1, //.
+                1, 1, //.
+            ]
+            .map(Handle)
+        );
     }
 
     #[test]

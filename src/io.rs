@@ -1,8 +1,8 @@
 use anyhow::{bail, format_err, Result};
 use std::fs::File;
-use std::path::Path;
-use std::iter::repeat;
 use std::io::{BufWriter, Write};
+use std::iter::repeat;
+use std::path::Path;
 
 /// Import an RLE file
 pub fn load_rle(path: impl AsRef<Path>) -> Result<(Vec<bool>, usize)> {
@@ -39,7 +39,6 @@ pub fn load_rle(path: impl AsRef<Path>) -> Result<(Vec<bool>, usize)> {
 
     let (width, height) = (parse_section("x")?, parse_section("y")?);
 
-
     // Load data
     let mut data = vec![];
 
@@ -53,8 +52,7 @@ pub fn load_rle(path: impl AsRef<Path>) -> Result<(Vec<bool>, usize)> {
                     let n = digits.parse().unwrap_or(1);
                     digits.clear();
                     x += n;
-                    if x > width {
-                    }
+                    if x > width {}
                     data.extend(repeat(c == 'o').take(n));
                 }
                 '$' | '!' => {
@@ -92,10 +90,16 @@ pub fn load_rle(path: impl AsRef<Path>) -> Result<(Vec<bool>, usize)> {
 }
 
 pub fn write_ppm(path: impl AsRef<Path>, data: &[u8], width: usize) -> Result<()> {
-    assert!(data.len() % 3 == 0, "Data length must be a multiple of 3 (RGB)");
+    assert!(
+        data.len() % 3 == 0,
+        "Data length must be a multiple of 3 (RGB)"
+    );
     let n_pixels = data.len() / 3;
 
-    assert!(n_pixels % width == 0, "Pixel count must be a multiple of width");
+    assert!(
+        n_pixels % width == 0,
+        "Pixel count must be a multiple of width"
+    );
     let height = n_pixels / width;
 
     let file = File::create(path)?;
@@ -109,6 +113,3 @@ pub fn write_ppm(path: impl AsRef<Path>, data: &[u8], width: usize) -> Result<()
 
     Ok(())
 }
-
-
-

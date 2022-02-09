@@ -31,7 +31,7 @@ struct Opt {
 
     /// Use step numbers instead of frame numbers
     #[structopt(long)]
-    use_step_numbers: bool
+    use_step_numbers: bool,
 }
 
 fn main() -> Result<()> {
@@ -61,7 +61,11 @@ fn main() -> Result<()> {
     let handle = life.insert_array(&rle, rle_width, (center, center), n as _);
 
     // Calculate result
-    for (frame_idx, steps) in (args.steps..).step_by(args.stride).take(args.frames).enumerate() {
+    for (frame_idx, steps) in (args.steps..)
+        .step_by(args.stride)
+        .take(args.frames)
+        .enumerate()
+    {
         //dbg!(steps);
         let begin_time = std::time::Instant::now();
 
