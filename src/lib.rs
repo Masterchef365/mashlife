@@ -146,8 +146,8 @@ impl HashLife {
         // Solve 4x4 if we're at n = 2
         let result = if cell_n == 2 {
             let result = match dt {
-                0 => solve_4x4(self.grandchildren(handle)),
-                1 => self.center_passthrough(handle),
+                0 => self.center_passthrough(handle),
+                1 => solve_4x4(self.grandchildren(handle)),
                 _ => panic!("Invalid dt for n = 2"),
             };
             self.insert_cell(result, cell_n - 1)
