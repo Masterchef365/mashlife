@@ -1,1 +1,1 @@
-feh --force-alias -Z animation/{0..50}.ppm
+feh --force-alias -Z animation/{0..500}.png

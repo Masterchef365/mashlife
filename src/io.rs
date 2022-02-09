@@ -89,7 +89,7 @@ pub fn load_rle(path: impl AsRef<Path>) -> Result<(Vec<bool>, usize)> {
     Ok((data, width))
 }
 
-pub fn write_ppm(path: impl AsRef<Path>, data: &[u8], width: usize) -> Result<()> {
+pub fn write_png(path: impl AsRef<Path>, data: &[u8], width: usize) -> Result<()> {
     assert!(
         data.len() % 3 == 0,
         "Data length must be a multiple of 3 (RGB)"
@@ -103,13 +103,14 @@ pub fn write_ppm(path: impl AsRef<Path>, data: &[u8], width: usize) -> Result<()
     let height = n_pixels / width;
 
     let file = File::create(path)?;
-    let mut file = BufWriter::new(file);
+    let file = BufWriter::new(file);
 
-    writeln!(file, "P6")?;
-    writeln!(file, "{} {}", width, height)?;
-    writeln!(file, "{}", u8::MAX)?;
+    let mut encoder = png::Encoder::new(file, width as _, height as _); // Width is 2 pixels and height is 1.
+    encoder.set_color(png::ColorType::Rgb);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header()?;
 
-    file.write_all(&data)?;
+    writer.write_image_data(&data)?;
 
     Ok(())
 }

@@ -18,7 +18,7 @@ struct Opt {
     out_path: Option<PathBuf>,
 
     /// Animation step stride
-    #[structopt(short, long, default_value = "1")]
+    #[structopt(long, default_value = "1")]
     stride: usize,
 
     /// Number of frames to render
@@ -51,14 +51,15 @@ fn main() -> Result<()> {
     let max_rle_dim = rle_height.max(rle_width);
     let largest_num_steps = args.steps + args.stride * (args.frames - 1);
     let n = highest_pow_2(max_rle_dim as _).max(highest_pow_2(largest_num_steps as u64) + 2);
-    //dbg!(n);
+
+    dbg!(n);
 
     // Create simulation
     let mut life = HashLife::new();
 
     // Insert RLE
-    let center = 1 << n - 1;
-    let handle = life.insert_array(&rle, rle_width, (center, center), n as _);
+    let half_width = 1 << n - 1;
+    let handle = life.insert_array(&rle, rle_width, dbg!((half_width, half_width)), n as _);
 
     // Calculate result
     for (frame_idx, steps) in (args.steps..)
@@ -78,8 +79,11 @@ fn main() -> Result<()> {
 
         if let Some(out_path) = &args.out_path {
             // Rasterize result
-            let view_rect = ((0, 0), (1 << n, 1 << n));
-            let raster = life.raster(handle, view_rect);
+            let view_rect = (
+                (0, 0),
+                (half_width, half_width)
+            );
+            let raster = life.raster(handle, dbg!(view_rect));
 
             // Name image
             let frame_num = if args.use_step_numbers {
@@ -89,9 +93,9 @@ fn main() -> Result<()> {
             };
 
             let image_name = if args.use_rle_prefix {
-                format!("{}_{}.ppm", rle_name, frame_num)
+                format!("{}_{}.png", rle_name, frame_num)
             } else {
-                format!("{}.ppm", frame_num)
+                format!("{}.png", frame_num)
             };
 
             //dbg!(life.macrocells.len());
@@ -99,7 +103,7 @@ fn main() -> Result<()> {
             // Write image
             let (view_width, _) = mashlife::rect_dimensions(view_rect);
             let pixels = cells_to_pixels(&raster);
-            mashlife::io::write_ppm(out_path.join(image_name), &pixels, view_width as _)
+            mashlife::io::write_png(out_path.join(image_name), &pixels, view_width as _)
                 .context("Writing image")?;
         }
     }

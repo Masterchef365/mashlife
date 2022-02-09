@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 anyhow = "1"
 structopt = { version = "0.3", default-features = false }
+png = "0.17.2"

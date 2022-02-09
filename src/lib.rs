@@ -240,7 +240,7 @@ impl HashLife {
             .map(|Handle(child)| self.macrocells[child].children)
     }
 
-    /// Create a raster
+    /// Create a raster image from the given node
     pub fn raster(&self, root: Handle, rect: Rect) -> Vec<bool> {
         let (width, height) = rect_dimensions(rect);
         let mut data = vec![false; (width * height) as usize];
