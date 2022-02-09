@@ -1,1 +1,1 @@
-cargo run --release -- $@ && feh --force-aliasing -Z out.ppm 
+cargo run -- --steps 30 life/52513m.rle

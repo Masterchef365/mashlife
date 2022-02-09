@@ -1,0 +1,50 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{parskip}
+
+\newcommand{\ra}{\rightarrow}
+\newcommand{\dt}{\Delta T}
+
+\begin{document}
+
+\section*{Definitions}
+\[ F((H_N, T), \dt) \ra (H_{N-1}, T + \dt) \text{ where } 0 \le \dt \le 2^{N - 2} \]
+\[ K((H_N, T)) \ra (H_{N-1}, T), (H_{N-1}, T), (H_{N-1}, T) \]
+\[ G((H_N, T), (H_N, T)) \ra (H_{N + 1}, T) \]
+
+\section*{$F((H_N, T), \dt):$}
+Assert $\dt \le 2^{N - 2}$
+
+$\dt_1 = \min(\dt, 2^{N - 3})$
+
+$\dt_2 = \max(\dt - 2^{N - 3}, 0)$
+
+$a, b, c = K((H_N, T))$ : $(H_{N - 1}, T) \forall a, b, c$
+
+$d, e, f = F([a, b, c], \dt_1)$ : $(H_{N - 2}, T + \dt_1) \forall d, e, f$
+
+$g, h = G([(d, e), (e, f)])$ : $(H_{N - 1}, T + \dt_1) \forall g, h$
+
+$i, j = F([g, h], \dt_2)$ : $(H_{N - 2}, T + \dt_1 + \dt_2) \forall i, j$
+
+Return $G(i, j)$ : $(H_{N - 1}, T + \dt_1 + \dt_2) = (H_{N - 1}, T + \dt)$
+
+\section*{$F((H_2, T), \dt) \ra (H_1, T + \dt) \text{ where } 0 \le \dt \le 1$}
+If $\dt = 0$:
+
+\begin{itemize}
+    \item Pass last input through
+\end{itemize}
+
+Else:
+\begin{itemize}
+    \item Solve 4x4 square
+\end{itemize}
+
+
+\section*{Comments}
+\begin{itemize}
+    \item Memoize the inputs to $F((H_N, T), \dt)$
+\end{itemize}
+
+\end{document}

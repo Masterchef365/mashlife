@@ -11,7 +11,7 @@ struct Opt {
     // #[structopt(short = "r", long = "rle")]
     /// Number of steps to advance
     #[structopt(short, long, default_value = "8")]
-    steps: u128,
+    steps: usize,
 
     /// Output file path
     #[structopt(short, long, default_value = "out.ppm")]

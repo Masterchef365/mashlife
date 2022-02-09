@@ -10,18 +10,18 @@ type SubCells = [Handle; 4];
 type Coord = (i64, i64);
 type Rect = (Coord, Coord);
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 struct MacroCell {
     /// The width of this cell is 2^n
     n: usize,
     /// Indices of child cells (each with width 2^(n-1))
     children: SubCells,
-    /// The result of this macrocell 2^(n-2) time steps later, width width 2^(n-1).
-    result: Option<Handle>,
+    /// Mapping from time step to result (if any)
+    result: HashMap<usize, Handle>,
 }
 
 pub struct HashLife {
-    /// Mapping from sub-cells to parent cell
+    /// Mapping from (sub-cells and time step) to parent cell
     parent_cell: HashMap<SubCells, Handle>,
     /// Array of macrocells
     macrocells: Vec<MacroCell>,
@@ -34,14 +34,14 @@ impl HashLife {
             parent_cell: [([Handle(0); 4], Handle(0))].into_iter().collect(),
             macrocells: vec![
                 MacroCell {
-                    n: usize::MAX,
+                    n: 0,
                     children: [Handle(0); 4],
-                    result: Some(Handle(0)),
+                    result: Default::default(),
                 },
                 MacroCell {
-                    n: usize::MAX,
+                    n: 0,
                     children: [Handle(usize::MAX); 4],
-                    result: None,
+                    result: Default::default(),
                 },
             ],
         }
@@ -110,7 +110,7 @@ impl HashLife {
                 self.macrocells.push(MacroCell {
                     n,
                     children,
-                    result: None,
+                    result: Default::default(),
                 });
                 let handle = Handle(idx);
                 self.parent_cell.insert(children, handle);
@@ -122,54 +122,55 @@ impl HashLife {
 
     /// Returns the given macro`cell` advanced by the given number of `steps` (up to and including
     /// 2^(n-2) where 2^n is the width of the cell
-    pub fn result(&mut self, handle: Handle, steps: u128) -> Handle {
+    pub fn result(&mut self, handle: Handle, dt: usize) -> Handle {
         // Fast-path for zeroes
         if handle.0 == 0 {
             return handle;
         }
 
-        let cell = self.macrocells[handle.0];
+        let cell = self.macrocell(handle);
+        let cell_n = cell.n;
 
         assert!(
             cell.n >= 2,
             "Results can only be computed for 4x4 cells and larger"
         );
 
-        // Check status of child cells
-        let skip = (steps >> cell.n) & 1 == 0;
-
-        if skip {
-            dbg!(cell.n, steps, skip);
-            let passthrough = self.center_passthrough(handle, steps);
-            return self.insert_cell(passthrough, cell.n - 1);
-        }
+        assert!(dt <= 1 << cell.n - 2, "dt must be <= 2^(n - 2)");
 
         // Check if we already know the result
-        // If we might skip one time step, we can't use the cached result because it's comprised of
-        // two 2^(n-3) time steps
-        if let Some(result) = cell.result {
+        if let Some(&result) = cell.result.get(&dt) {
             return result;
         }
 
         // Solve 4x4 if we're at n = 2
-        // Skip if the relevant bit is set
-        if cell.n == 2 {
-            self.insert_cell(solve_4x4(self.subcells(handle)), cell.n - 1)
+        let result = if cell_n == 2 {
+            let result = match dt {
+                0 => solve_4x4(self.grandchildren(handle)),
+                1 => self.center_passthrough(handle),
+                _ => panic!("Invalid dt for n = 2"),
+            };
+            self.insert_cell(result, cell_n - 1)
         } else {
+            let sub_step_dt = 1 << cell_n - 3;
+
+            let dt_1 = dt.min(sub_step_dt);
+            let dt_2 = dt.checked_sub(sub_step_dt).unwrap_or(0);
+
             /*
-            Deconstruct the quadrants of the macrocell, like so:
-            | _ B | E _ |
-            | C D | G H |
-            +-----+-----+
-            | I J | M N |
-            | _ L | O _ |
-            */
+               Deconstruct the quadrants of the macrocell, like so:
+               | _ B | E _ |
+               | C D | G H |
+               +-----+-----+
+               | I J | M N |
+               | _ L | O _ |
+               */
             let [
                 tl @ [_, b, c, d], // Top left
                 tr @ [e, _, g, h], // Top right
                 bl @ [i, j, _, l], // Bottom left
                 br @ [m, n, o, _] // Bottom right
-            ] = self.subcells(handle);
+            ] = self.grandchildren(handle);
 
             let middle_3x3 = [
                 // Top inner row
@@ -185,47 +186,55 @@ impl HashLife {
                 [j, m, l, o],
                 br,
             ]
-            .map(|subcells| self.insert_cell(subcells, cell.n - 1));
+                .map(|subcells| self.insert_cell(subcells, cell_n - 1));
 
             /*
-            Compute results or passthroughs for grandchild nodes
-            | Q R S |
-            | T U V |
-            | W X Y |
-            */
-            let [q, r, s, t, u, v, w, x, y] =
-                middle_3x3.map(|handle| self.result(handle, u128::MAX));
+               Compute results or passthroughs for grandchild nodes
+               | Q R S |
+               | T U V |
+               | W X Y |
+               */
+
+            let [q, r, s, t, u, v, w, x, y] = middle_3x3.map(|handle| self.result(handle, dt_1));
 
             // Get the middle four quadrants of the 3x3 above
             let middle_2x2 = [[q, r, t, u], [r, s, u, v], [t, u, w, x], [u, v, x, y]]
-                .map(|subcells| self.insert_cell(subcells, cell.n - 1));
+                .map(|subcells| self.insert_cell(subcells, cell_n - 1));
 
             // Compute results or passthroughs for child nodes
-            let result = middle_2x2.map(|handle| self.result(handle, u128::MAX));
+            let result = middle_2x2.map(|handle| self.result(handle, dt_2));
 
             // Save the result
-            let result = self.insert_cell(result, cell.n - 1);
+            self.insert_cell(result, cell_n - 1)
+        };
 
-            // Assign the result of the cell we computed so we don't have to do so again!
-            self.macrocells[handle.0].result = Some(result);
+        self.macrocell_mut(handle).result.insert(dt, result);
+        result
+    }
 
-            result
-        }
+    /// Return the macrocell behind the given handle
+    fn macrocell(&self, Handle(idx): Handle) -> &MacroCell {
+        &self.macrocells[idx]
+    }
+
+    /// Return the mutable macrocell behind the given handle
+    fn macrocell_mut(&mut self, Handle(idx): Handle) -> &mut MacroCell {
+        &mut self.macrocells[idx]
     }
 
     /// Get the center 4 cells of the given cell
-    fn center_passthrough(&mut self, handle: Handle, steps: u128) -> SubCells {
+    fn center_passthrough(&mut self, handle: Handle) -> SubCells {
         let [
             [_, _, _, d], // Top left
             [_, _, g, _], // Top right
             [_, j, _, _], // Bottom left
             [m, _, _, _] // Bottom right
-        ] = self.subcells(handle);
-        [d, g, j, m].map(|h| self.result(h, steps))
+        ] = self.grandchildren(handle);
+        [d, g, j, m]
     }
 
-    /// Children of the children of the given handle
-    fn subcells(&self, Handle(parent): Handle) -> [SubCells; 4] {
+    /// Grandchildren of the given handle
+    fn grandchildren(&self, Handle(parent): Handle) -> [SubCells; 4] {
         self.macrocells[parent]
             .children
             .map(|Handle(child)| self.macrocells[child].children)
@@ -241,13 +250,13 @@ impl HashLife {
     }
 
     /// Recursively create a raster image
-    fn raster_rec(&self, corner: Coord, image: &mut [bool], rect: Rect, Handle(idx): Handle) {
-        // Check if the output is gauranteed to be zero
-        if idx == 0 {
+    fn raster_rec(&self, corner: Coord, image: &mut [bool], rect: Rect, handle: Handle) {
+        // Check if the output is gauranteed to be zero (assumes input is zeroed!)
+        if handle == Handle(0) {
             return;
         }
 
-        let cell = self.macrocells[idx];
+        let cell = self.macrocell(handle);
         debug_assert_ne!(cell.n, 0);
 
         if cell.n == 1 {
@@ -365,32 +374,32 @@ mod tests {
         assert_eq!(
             solve_4x4([
                 [
-                    0, 0, //.
-                    1, 0 //.
+                0, 0, //.
+                1, 0 //.
                 ]
                 .map(Handle),
                 [
-                    1, 0, //.
-                    1, 0, //.
+                1, 0, //.
+                1, 0, //.
                 ]
                 .map(Handle),
                 [
-                    0, 1, //.
-                    0, 0, //.
+                0, 1, //.
+                0, 0, //.
                 ]
                 .map(Handle),
                 [
-                    1, 0, //.
-                    0, 0, //.
+                1, 0, //.
+                0, 0, //.
                 ]
                 .map(Handle)
-            ]),
-            [
-                0, 1, //.
-                1, 1, //.
-            ]
-            .map(Handle)
-        );
+                ]),
+                [
+                    0, 1, //.
+                    1, 1, //.
+                ]
+                    .map(Handle)
+                    );
     }
 
     #[test]
