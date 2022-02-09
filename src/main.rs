@@ -14,8 +14,8 @@ struct Opt {
     steps: usize,
 
     /// Output file path
-    #[structopt(short, long, default_value = "")]
-    out_path: PathBuf,
+    #[structopt(short, long)]
+    out_path: Option<PathBuf>,
 
     /// Animation step stride
     #[structopt(short, long, default_value = "1")]
@@ -51,7 +51,7 @@ fn main() -> Result<()> {
     let max_rle_dim = rle_height.max(rle_width);
     let largest_num_steps = args.steps + args.stride * (args.frames - 1);
     let n = highest_pow_2(max_rle_dim as _).max(highest_pow_2(largest_num_steps as u64) + 2);
-    dbg!(n);
+    //dbg!(n);
 
     // Create simulation
     let mut life = HashLife::new();
@@ -62,36 +62,42 @@ fn main() -> Result<()> {
 
     // Calculate result
     for (frame_idx, steps) in (args.steps..).step_by(args.stride).take(args.frames).enumerate() {
-        dbg!(steps);
+        //dbg!(steps);
         let begin_time = std::time::Instant::now();
 
         let handle = life.result(handle, steps);
 
+        //dbg!(life.macrocells.len());
+
         let elapsed = begin_time.elapsed();
         println!("{}: {}ms", steps, elapsed.as_secs_f32() * 1e3);
 
-        // Rasterize result
-        let view_rect = ((0, 0), (1 << n, 1 << n));
-        let raster = life.raster(handle, view_rect);
+        if let Some(out_path) = &args.out_path {
+            // Rasterize result
+            let view_rect = ((0, 0), (1 << n, 1 << n));
+            let raster = life.raster(handle, view_rect);
 
-        // Name image
-        let frame_num = if args.use_step_numbers {
-            steps
-        } else {
-            frame_idx
-        };
+            // Name image
+            let frame_num = if args.use_step_numbers {
+                steps
+            } else {
+                frame_idx
+            };
 
-        let image_name = if args.use_rle_prefix {
-            format!("{}_{}.ppm", rle_name, frame_num)
-        } else {
-            format!("{}.ppm", frame_num)
-        };
+            let image_name = if args.use_rle_prefix {
+                format!("{}_{}.ppm", rle_name, frame_num)
+            } else {
+                format!("{}.ppm", frame_num)
+            };
 
-        // Write image
-        let (view_width, _) = mashlife::rect_dimensions(view_rect);
-        let pixels = cells_to_pixels(&raster);
-        mashlife::io::write_ppm(args.out_path.join(image_name), &pixels, view_width as _)
-            .context("Writing image")?;
+            //dbg!(life.macrocells.len());
+
+            // Write image
+            let (view_width, _) = mashlife::rect_dimensions(view_rect);
+            let pixels = cells_to_pixels(&raster);
+            mashlife::io::write_ppm(out_path.join(image_name), &pixels, view_width as _)
+                .context("Writing image")?;
+        }
     }
 
     Ok(())
