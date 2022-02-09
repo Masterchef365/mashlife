@@ -32,6 +32,10 @@ struct Opt {
     /// Use step numbers instead of frame numbers
     #[structopt(long)]
     use_step_numbers: bool,
+
+    /// Use the specified output width, as opposed the default view
+    #[structopt(short, long)]
+    image_width: Option<i64>,
 }
 
 fn main() -> Result<()> {
@@ -52,14 +56,13 @@ fn main() -> Result<()> {
     let largest_num_steps = args.steps + args.stride * (args.frames - 1);
     let n = highest_pow_2(max_rle_dim as _).max(highest_pow_2(largest_num_steps as u64) + 2);
 
-    dbg!(n);
-
     // Create simulation
     let mut life = HashLife::new();
 
     // Insert RLE
     let half_width = 1 << n - 1;
-    let handle = life.insert_array(&rle, rle_width, dbg!((half_width, half_width)), n as _);
+    let quarter_width = 1 << n - 2;
+    let handle = life.insert_array(&rle, rle_width, (half_width, half_width), n as _);
 
     // Calculate result
     for (frame_idx, steps) in (args.steps..)
@@ -67,23 +70,23 @@ fn main() -> Result<()> {
         .take(args.frames)
         .enumerate()
     {
-        //dbg!(steps);
         let begin_time = std::time::Instant::now();
 
         let handle = life.result(handle, steps);
-
-        //dbg!(life.macrocells.len());
 
         let elapsed = begin_time.elapsed();
         println!("{}: {}ms", steps, elapsed.as_secs_f32() * 1e3);
 
         if let Some(out_path) = &args.out_path {
             // Rasterize result
-            let view_rect = (
-                (0, 0),
-                (half_width, half_width)
-            );
-            let raster = life.raster(handle, dbg!(view_rect));
+            let view_rect = match args.image_width {
+                Some(width) => (
+                    (quarter_width - width / 2, quarter_width - width / 2),
+                    (quarter_width + width / 2, quarter_width + width / 2),
+                ),
+                None => ((0, 0), (half_width, half_width)),
+            };
+            let raster = life.raster(handle, view_rect);
 
             // Name image
             let frame_num = if args.use_step_numbers {
@@ -97,8 +100,6 @@ fn main() -> Result<()> {
             } else {
                 format!("{}.png", frame_num)
             };
-
-            //dbg!(life.macrocells.len());
 
             // Write image
             let (view_width, _) = mashlife::rect_dimensions(view_rect);
