@@ -1,1 +1,1 @@
-feh --force-alias -Z animation/out_{0..500}.ppm
+feh --force-alias -Z animation/{0..50}.ppm

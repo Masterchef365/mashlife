@@ -8,28 +8,50 @@ use structopt::StructOpt;
 struct Opt {
     /// Load an RLE file
     rle: PathBuf,
-    // #[structopt(short = "r", long = "rle")]
-    /// Number of steps to advance
+
+    /// Number of steps to advance (or beginning step in animation)
     #[structopt(short, long, default_value = "8")]
     steps: usize,
 
     /// Output file path
-    #[structopt(short, long, default_value = "out.ppm")]
-    outfile: PathBuf,
+    #[structopt(short, long, default_value = "")]
+    out_path: PathBuf,
+
+    /// Animation step stride
+    #[structopt(short, long, default_value = "1")]
+    stride: usize,
+
+    /// Number of frames to render
+    #[structopt(short, long, default_value = "1")]
+    frames: usize,
+
+    /// Use the RLE file as the file name prefix
+    #[structopt(short, long)]
+    use_rle_prefix: bool,
+
+    /// Use step numbers instead of frame numbers
+    #[structopt(long)]
+    use_step_numbers: bool
 }
 
 fn main() -> Result<()> {
     let args = Opt::from_args();
 
+    let rle_name = args
+        .rle
+        .file_stem()
+        .expect("No file step")
+        .to_str()
+        .expect("RLE file not utf-8");
+
     // Load RLE
-    let (rle, rle_width) = mashlife::io::load_rle(args.rle).context("Failed to load RLE file")?;
+    let (rle, rle_width) = mashlife::io::load_rle(&args.rle).context("Failed to load RLE file")?;
     let rle_height = rle.len() / rle_width;
 
     let max_rle_dim = rle_height.max(rle_width);
-    let n = highest_pow_2(max_rle_dim as _).max(highest_pow_2(args.steps as _) + 2);
-
+    let largest_num_steps = args.steps + args.stride * (args.frames - 1);
+    let n = highest_pow_2(max_rle_dim as _).max(highest_pow_2(largest_num_steps as u64) + 2);
     dbg!(n);
-    dbg!(args.steps);
 
     // Create simulation
     let mut life = HashLife::new();
@@ -39,17 +61,38 @@ fn main() -> Result<()> {
     let handle = life.insert_array(&rle, rle_width, (center, center), n as _);
 
     // Calculate result
-    let handle = life.result(handle, args.steps);
+    for (frame_idx, steps) in (args.steps..).step_by(args.stride).take(args.frames).enumerate() {
+        dbg!(steps);
+        let begin_time = std::time::Instant::now();
 
-    // Rasterize result
-    let view_rect = ((0, 0), (1 << n, 1 << n));
-    let raster = life.raster(handle, view_rect);
+        let handle = life.result(handle, steps);
 
-    // Write image
-    let (view_width, _) = mashlife::rect_dimensions(view_rect);
+        let elapsed = begin_time.elapsed();
+        println!("{}: {}ms", steps, elapsed.as_secs_f32() * 1e3);
 
-    let pixels = cells_to_pixels(&raster);
-    mashlife::io::write_ppm(args.outfile, &pixels, view_width as _).context("Writing image")?;
+        // Rasterize result
+        let view_rect = ((0, 0), (1 << n, 1 << n));
+        let raster = life.raster(handle, view_rect);
+
+        // Name image
+        let frame_num = if args.use_step_numbers {
+            steps
+        } else {
+            frame_idx
+        };
+
+        let image_name = if args.use_rle_prefix {
+            format!("{}_{}.ppm", rle_name, frame_num)
+        } else {
+            format!("{}.ppm", frame_num)
+        };
+
+        // Write image
+        let (view_width, _) = mashlife::rect_dimensions(view_rect);
+        let pixels = cells_to_pixels(&raster);
+        mashlife::io::write_ppm(args.out_path.join(image_name), &pixels, view_width as _)
+            .context("Writing image")?;
+    }
 
     Ok(())
 }
