@@ -1,6 +1,6 @@
 use anyhow::{bail, format_err, Result};
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::BufWriter;
 use std::iter::repeat;
 use std::path::Path;
 
@@ -45,25 +45,30 @@ pub fn load_rle(path: impl AsRef<Path>) -> Result<(Vec<bool>, usize)> {
     let mut digits: String = "".into();
     let mut x = 0;
 
+    let digits_or_one = |digits: &mut String| {
+        let n = digits.parse().unwrap_or(1);
+        digits.clear();
+        n
+    };
+
     'lines: for line in lines {
         for c in line.trim().chars() {
             match c {
                 'b' | 'o' => {
-                    let n = digits.parse().unwrap_or(1);
-                    digits.clear();
+                    let n = digits_or_one(&mut digits);
                     x += n;
-                    if x > width {}
                     data.extend(repeat(c == 'o').take(n));
                 }
-                '$' | '!' => {
-                    match width.checked_sub(x) {
-                        None => bail!("Pattern exceeds width!"),
-                        Some(filler) => data.extend(repeat(false).take(filler)),
-                    }
-                    digits.clear();
-                    x = 0;
-                    if c == '!' {
-                        break 'lines;
+                '!' => break 'lines,
+                '$' => {
+                    let n = digits_or_one(&mut digits);
+
+                    for _ in 0..n {
+                        match width.checked_sub(x) {
+                            None => bail!("Pattern exceeds width!"),
+                            Some(filler) => data.extend(repeat(false).take(filler)),
+                        }
+                        x = 0;
                     }
                 }
                 c if c.is_digit(10) => digits.push(c),
@@ -73,18 +78,9 @@ pub fn load_rle(path: impl AsRef<Path>) -> Result<(Vec<bool>, usize)> {
         }
     }
 
+    // Fill remaining zeroes
     let len = data.len();
     data.extend(repeat(false).take((width * height).checked_sub(len).unwrap()));
-
-    /*if data.len() !=  {
-        bail!(
-            "Data length does not match header! {} vs {} * {} = {}",
-            data.len(),
-            width,
-            height,
-            width * height
-        );
-    }*/
 
     Ok((data, width))
 }
@@ -113,4 +109,12 @@ pub fn write_png(path: impl AsRef<Path>, data: &[u8], width: usize) -> Result<()
     writer.write_image_data(&data)?;
 
     Ok(())
+}
+
+pub fn cells_to_pixels(cells: &[bool]) -> Vec<u8> {
+    cells
+        .iter()
+        .map(|&b| [b as u8 * 255; 3])
+        .flatten()
+        .collect()
 }

@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use mashlife::HashLife;
 use std::path::PathBuf;
 use structopt::StructOpt;
+use mashlife::io::cells_to_pixels;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "MashLife", about = "Mashes life")]
@@ -44,9 +45,9 @@ fn main() -> Result<()> {
     let rle_name = args
         .rle
         .file_stem()
-        .expect("No file step")
+        .context("No file step")?
         .to_str()
-        .expect("RLE file not utf-8");
+        .context("RLE file not utf-8")?;
 
     // Load RLE
     let (rle, rle_width) = mashlife::io::load_rle(&args.rle).context("Failed to load RLE file")?;
@@ -62,7 +63,7 @@ fn main() -> Result<()> {
     // Insert RLE
     let half_width = 1 << n - 1;
     let quarter_width = 1 << n - 2;
-    let handle = life.insert_array(&rle, rle_width, (half_width, half_width), n as _);
+    let handle = life.insert_array(&rle, rle_width, (quarter_width, quarter_width), n as _);
 
     // Calculate result
     for (frame_idx, steps) in (args.steps..)
@@ -110,14 +111,6 @@ fn main() -> Result<()> {
     }
 
     Ok(())
-}
-
-fn cells_to_pixels(cells: &[bool]) -> Vec<u8> {
-    cells
-        .iter()
-        .map(|&b| [b as u8 * 255; 3])
-        .flatten()
-        .collect()
 }
 
 /// Returns the ceiling of logbase 2 of the given integer
