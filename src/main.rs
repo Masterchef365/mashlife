@@ -57,8 +57,6 @@ fn main() -> Result<()> {
     let largest_num_steps = args.steps + args.stride * (args.frames - 1);
     let n = highest_pow_2(max_rle_dim as _).max(highest_pow_2(largest_num_steps as u64) + 2);
 
-    dbg!(rle_width, rle_height, rle_width*rle_height);
-
     // Create simulation
     let mut life = HashLife::new();
 
