@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
+use mashlife::io::cells_to_pixels;
 use mashlife::HashLife;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use mashlife::io::cells_to_pixels;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "MashLife", about = "Mashes life")]
@@ -57,13 +57,30 @@ fn main() -> Result<()> {
     let largest_num_steps = args.steps + args.stride * (args.frames - 1);
     let n = highest_pow_2(max_rle_dim as _).max(highest_pow_2(largest_num_steps as u64) + 2);
 
+    dbg!(rle_width, rle_height, rle_width*rle_height);
+
     // Create simulation
     let mut life = HashLife::new();
 
     // Insert RLE
     let half_width = 1 << n - 1;
     let quarter_width = 1 << n - 2;
-    let handle = life.insert_array(&rle, rle_width, (quarter_width, quarter_width), n as _);
+
+    let view_width = args.image_width.unwrap_or(half_width);
+
+    let view_tl = (
+        (half_width - view_width as i64) / 2,
+        (half_width - view_width as i64) / 2,
+    );
+
+    let view_rect = (view_tl, (view_tl.0 + view_width, view_tl.1 + view_width));
+
+    let insert_tl = (
+        (half_width - rle_width as i64) / 2 + quarter_width,
+        (half_width - rle_height as i64) / 2 + quarter_width
+    );
+
+    let handle = life.insert_array(&rle, rle_width, insert_tl, n as _);
 
     // Calculate result
     for (frame_idx, steps) in (args.steps..)
@@ -79,14 +96,6 @@ fn main() -> Result<()> {
         println!("{}: {}ms", steps, elapsed.as_secs_f32() * 1e3);
 
         if let Some(out_path) = &args.out_path {
-            // Rasterize result
-            let view_rect = match args.image_width {
-                Some(width) => (
-                    (quarter_width - width / 2, quarter_width - width / 2),
-                    (quarter_width + width / 2, quarter_width + width / 2),
-                ),
-                None => ((0, 0), (half_width, half_width)),
-            };
             let raster = life.raster(handle, view_rect);
 
             // Name image
@@ -103,7 +112,6 @@ fn main() -> Result<()> {
             };
 
             // Write image
-            let (view_width, _) = mashlife::rect_dimensions(view_rect);
             let pixels = cells_to_pixels(&raster);
             mashlife::io::write_png(out_path.join(image_name), &pixels, view_width as _)
                 .context("Writing image")?;
