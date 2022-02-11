@@ -263,12 +263,12 @@ impl App<Opt> for HashlifeVisualizer {
                 let dt = dt.max(1);
 
                 let t = dt as f32 / args.steps as f32;
-                let w = 0.5;
+                let w = 0.3;
                 let t = t.sqrt() * (1. + w) - w;
 
                 let color = mix(
-                    mix([0.512,0.157,1.000], [0.990,0.198,0.103], t),
-                    mix([1.000,0.021,0.446], [0.990,0.903,0.000], t),
+                    mix([0.002,0.591,0.990], [0.823,0.162,1.000], t),
+                    mix([0.881,0.190,0.990], [1.000,0.420,0.098], t),
                     t
                 );
 
