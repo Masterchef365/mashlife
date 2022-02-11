@@ -17,8 +17,8 @@ pub struct MacroCell {
     pub n: usize,
     /// Indices of child cells (each with width 2^(n-1))
     pub children: SubCells,
-    /// This macrocell was created from the given coordinate
-    pub creation_coord: Option<Coord>,
+    /// This macrocell was created from the given coordinate and steps
+    pub creation_coord: Option<(Coord, usize)>,
     /// Mapping from time step to result (if any)
     pub result: HashMap<usize, Handle>,
 }
@@ -98,13 +98,12 @@ impl HashLife {
 
         // Return the input pixel at the given coordinates
         if n == 0 {
-                let idx = sample_rect(tl_corner, input_rect);
-                if idx > Some(input.len()) {
-                    let (w, h) = crate::rect_dimensions(input_rect);
-                    dbg!(tl_corner, input_rect, idx, w, h);
-                }
+            let idx = sample_rect(tl_corner, input_rect);
+            if idx > Some(input.len()) {
+                let (w, h) = crate::rect_dimensions(input_rect);
+                dbg!(tl_corner, input_rect, idx, w, h);
+            }
             return Handle(
-
                 sample_rect(tl_corner, input_rect)
                     .map(|idx| input[idx])
                     .unwrap_or(false) as usize,
@@ -115,10 +114,15 @@ impl HashLife {
         let children = subcoords(tl_corner, n - 1)
             .map(|sub_corner| self.insert_rect(input, sub_corner, input_rect, n - 1));
 
-        self.insert_cell(children, n, Some(tl_corner))
+        self.insert_cell(children, n, Some((tl_corner, 0)))
     }
 
-    fn insert_cell(&mut self, children: SubCells, n: usize, coord: Option<Coord>) -> Handle {
+    fn insert_cell(
+        &mut self,
+        children: SubCells,
+        n: usize,
+        coord: Option<(Coord, usize)>,
+    ) -> Handle {
         match self.parent_cell.get(&children) {
             None => {
                 let idx = self.macrocells.len();
@@ -138,7 +142,7 @@ impl HashLife {
 
     /// Returns the given macro`cell` advanced by the given number of `steps` (up to and including
     /// 2^(n-2) where 2^n is the width of the cell
-    pub fn result(&mut self, handle: Handle, dt: usize, coord: Option<Coord>) -> Handle {
+    pub fn result(&mut self, handle: Handle, dt: usize, coord: Coord) -> Handle {
         // Fast-path for zeroes
         if handle.0 == 0 {
             return handle;
@@ -160,7 +164,8 @@ impl HashLife {
         }
 
         let quarter_width = 1 << cell.n;
-        let result_coord = coord.map(|(x, y)| (x + quarter_width, y + quarter_width));
+        let (cx, cy) = coord;
+        let result_coord = ((cx + quarter_width, cy + quarter_width), dt);
 
         // Solve 4x4 if we're at n = 2
         let result = if cell_n == 2 {
@@ -169,7 +174,7 @@ impl HashLife {
                 1 => solve_4x4(self.grandchildren(handle)),
                 _ => panic!("Invalid dt for n = 2"),
             };
-            self.insert_cell(result, cell_n - 1, result_coord)
+            self.insert_cell(result, cell_n - 1, Some(((cx + 1, cy + 1), dt)))
         } else {
             let sub_step_dt = 1 << cell_n - 3;
 
@@ -191,21 +196,27 @@ impl HashLife {
                 br @ [m, n, o, _] // Bottom right
             ] = self.grandchildren(handle);
 
+            let ch = 1i64 << cell_n - 1; // Width of a child
+            let gt = 1i64 << cell_n - 2; // Width of a grandchild
+            let hg = 1i64 << cell_n - 3; // Half the width of a grandchild
+
+            let ic = |u, v| (hg + u * gt + cx, hg + v * gt + cy);
+
             let middle_3x3 = [
                 // Top inner row
-                tl,
-                [b, e, d, g],
-                tr,
+                (ic(0, 0), tl),
+                (ic(1, 0), [b, e, d, g]),
+                (ic(2, 0), tr),
                 // Middle inner row
-                [c, d, i, j],
-                [d, g, j, m],
-                [g, h, m, n],
+                (ic(0, 1), [c, d, i, j]),
+                (ic(1, 1), [d, g, j, m]),
+                (ic(2, 1), [g, h, m, n]),
                 // Bottom inner row
-                bl,
-                [j, m, l, o],
-                br,
+                (ic(0, 2), bl),
+                (ic(1, 2), [j, m, l, o]),
+                (ic(2, 2), br),
             ]
-            .map(|subcells| self.insert_cell(subcells, cell_n - 1, None));
+            .map(|(coord, subcells)| (coord, self.insert_cell(subcells, cell_n - 1, None)));
 
             /*
             Compute results or passthroughs for grandchild nodes
@@ -214,17 +225,25 @@ impl HashLife {
             | W X Y |
             */
 
-            let [q, r, s, t, u, v, w, x, y] = middle_3x3.map(|handle| self.result(handle, dt_1, None));
+            let [q, r, s, t, u, v, w, x, y] =
+                middle_3x3.map(|(coord, handle)| self.result(handle, dt_1, coord));
+
+            let iic = |u, v| (gt + u * gt + cx, gt + v * gt + cy);
 
             // Get the middle four quadrants of the 3x3 above
-            let middle_2x2 = [[q, r, t, u], [r, s, u, v], [t, u, w, x], [u, v, x, y]]
-                .map(|subcells| self.insert_cell(subcells, cell_n - 1, None));
+            let middle_2x2 = [
+                (iic(0, 0), [q, r, t, u]), 
+                (iic(1, 0), [r, s, u, v]), 
+                (iic(0, 1), [t, u, w, x]), 
+                (iic(1, 1), [u, v, x, y])
+            ]
+                .map(|(coord, subcells)| (coord, self.insert_cell(subcells, cell_n - 1, None)));
 
             // Compute results or passthroughs for child nodes
-            let result = middle_2x2.map(|handle| self.result(handle, dt_2, None));
+            let result = middle_2x2.map(|(coord, handle)| self.result(handle, dt_2, coord));
 
             // Save the result
-            self.insert_cell(result, cell_n - 1, result_coord)
+            self.insert_cell(result, cell_n - 1, Some(((cx + ch, cy + ch), dt)))
         };
 
         self.macrocell_mut(handle).result.insert(dt, result);

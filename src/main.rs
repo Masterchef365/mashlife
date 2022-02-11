@@ -86,7 +86,7 @@ fn prepare_data(args: &Opt) -> Result<(HashLife, Handle, Handle, Rect)> {
 
     let input_cell = life.insert_array(&rle, rle_width, insert_tl, n as _);
 
-    let result_cell = life.result(input_cell, args.steps, Some(view_tl));
+    let result_cell = life.result(input_cell, args.steps, (-quarter_width, -quarter_width));
 
     /*
     let insert_rect = (
@@ -201,9 +201,9 @@ pub fn draw_rect(b: &mut GraphicsBuilder, ((x1, y1), (x2, y2)): Rect, color: [f3
         |pos: Coord| b.push_vertex(Vertex::new(world_to_graphics(pos, y), color));
 
     let tl = push_worldcoord((x1, y1));
-    let tr = push_worldcoord((x2 + 1, y1));
-    let bl = push_worldcoord((x1, y2 + 1));
-    let br = push_worldcoord((x2 + 1, y2 + 1));
+    let tr = push_worldcoord((x2, y1));
+    let bl = push_worldcoord((x1, y2));
+    let br = push_worldcoord((x2, y2));
 
     b.indices
         .extend_from_slice(&[tl, tr, tr, br, br, bl, bl, tl]);
@@ -243,10 +243,22 @@ impl App<Opt> for HashlifeVisualizer {
         let mut line_builder = GraphicsBuilder::new();
         let mut tri_builder = GraphicsBuilder::new();
 
-        draw_rect(&mut line_builder, ((0, 0), (10, 10)), [1.; 3], 0.);
-
         // Draw input
         let (life, input_cell, result_cell, view_rect) = prepare_data(&args)?;
+
+        for cell in life.macrocells() {
+            let width = 1 << cell.n;
+            if let Some((tl, dt)) = cell.creation_coord {
+                let dt = dt.max(1);
+
+                let rect = (tl, (tl.0 + width, tl.0 + width));
+
+                let y = time_to_graphics(dt);
+
+                dbg!(rect, y);
+                draw_rect(&mut line_builder, rect, [1.; 3], y);
+            }
+        }
 
         let input_n = life.macrocell(input_cell).n;
         let input_rect = square_rect(0, 1 << input_n);
@@ -260,6 +272,7 @@ impl App<Opt> for HashlifeVisualizer {
             time_to_graphics(1),
         );
 
+        /*
         // Draw result
         let result_raster = life.raster(result_cell, view_rect);
 
@@ -270,6 +283,7 @@ impl App<Opt> for HashlifeVisualizer {
             [1.; 3],
             time_to_graphics(args.steps),
         );
+        */
 
         Ok(Self {
             line_verts: ctx.vertices(&line_builder.vertices, false)?,
