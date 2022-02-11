@@ -106,7 +106,7 @@ fn scale_transform(xz_scale: f32, y_scale: f32, x: f32, y: f32, z: f32) -> [[f32
         [xz_scale, 0., 0., 0.],
         [0., y_scale, 0., 0.],
         [0., 0., xz_scale, 0.],
-        [x, y, z, 1.],
+        [x * xz_scale, y * y_scale, z * xz_scale, 1.],
     ]
 }
 
@@ -133,7 +133,7 @@ fn raster_to_mesh(b: &mut GraphicsBuilder, data: &[bool], rect: Rect, color: [f3
     for (row_idx, row) in data.chunks_exact(width as usize).enumerate() {
         for (col_idx, &elem) in row.iter().enumerate() {
             if elem {
-                let (x, z) = (row_idx as i64 + x1, col_idx as i64 + y1);
+                let (x, z) = (col_idx as i64 + x1, row_idx as i64 + y1);
 
                 let mut push =
                     |x, z| b.push_vertex(Vertex::new(world_to_graphics((x, z), y), color));
@@ -232,6 +232,8 @@ struct HashlifeVisualizer {
     tri_shader: Shader,
 
     camera: MultiPlatformCamera,
+
+    scale: [[f32; 4]; 4],
 }
 
 fn square_rect(corner: i64, width: i64) -> Rect {
@@ -240,12 +242,14 @@ fn square_rect(corner: i64, width: i64) -> Rect {
 
 impl App<Opt> for HashlifeVisualizer {
     fn init(ctx: &mut Context, platform: &mut Platform, args: Opt) -> Result<Self> {
+
+        // Calculate
+        let (life, input_cell, result_cell, view_rect) = prepare_data(&args)?;
+
         let mut line_builder = GraphicsBuilder::new();
         let mut tri_builder = GraphicsBuilder::new();
 
-        // Draw input
-        let (life, input_cell, result_cell, view_rect) = prepare_data(&args)?;
-
+        // Draw steps
         for cell in life.macrocells() {
             let width = 1 << cell.n;
             if let Some((tl, dt)) = cell.creation_coord {
@@ -255,11 +259,11 @@ impl App<Opt> for HashlifeVisualizer {
 
                 let y = time_to_graphics(dt);
 
-                dbg!(rect, y);
                 draw_rect(&mut line_builder, rect, [1.; 3], y);
             }
         }
 
+        // Draw input
         let input_n = life.macrocell(input_cell).n;
         let input_rect = square_rect(0, 1 << input_n);
         let input_raster = life.raster(input_cell, input_rect);
@@ -271,6 +275,9 @@ impl App<Opt> for HashlifeVisualizer {
             [1.; 3],
             time_to_graphics(1),
         );
+
+        let half_width = (1 << input_n - 1) as f32;
+        let scale = scale_transform(0.1, 3., -half_width, 0., -half_width);
 
         /*
         // Draw result
@@ -286,6 +293,7 @@ impl App<Opt> for HashlifeVisualizer {
         */
 
         Ok(Self {
+            scale,
             line_verts: ctx.vertices(&line_builder.vertices, false)?,
             line_indices: ctx.indices(&line_builder.indices, false)?,
             line_shader: ctx.shader(
@@ -306,16 +314,15 @@ impl App<Opt> for HashlifeVisualizer {
     }
 
     fn frame(&mut self, _ctx: &mut Context, _: &mut Platform) -> Result<Vec<DrawCmd>> {
-        let scale = scale_transform(0.1, 1., 0., 0., 0.);
         Ok(vec![
             DrawCmd::new(self.line_verts)
                 .indices(self.line_indices)
                 .shader(self.line_shader)
-                .transform(scale),
+                .transform(self.scale),
             DrawCmd::new(self.tri_verts)
                 .indices(self.tri_indices)
                 .shader(self.tri_shader)
-                .transform(scale),
+                .transform(self.scale),
         ])
     }
 
