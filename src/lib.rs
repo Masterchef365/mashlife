@@ -52,8 +52,8 @@ impl HashLife {
         }
     }
 
-    pub fn macrocells(&self) -> &[MacroCell] {
-        &self.macrocells
+    pub fn macrocells(&self) -> impl Iterator<Item=(Handle, &MacroCell)> {
+        self.macrocells.iter().enumerate().map(|(idx, cell)| (Handle(idx), cell))
     }
 
     /// Insert the given data with the given width and top-left

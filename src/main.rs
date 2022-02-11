@@ -129,6 +129,7 @@ fn raster_to_mesh(b: &mut GraphicsBuilder, data: &[bool], rect: Rect, color: [f3
     let height = y2 - y1;
 
     // TODO: Run-length compression for faces
+    //dbg!(data.len(), width, height, width * height);
     assert_eq!(data.len(), (width * height) as usize);
     for (row_idx, row) in data.chunks_exact(width as usize).enumerate() {
         for (col_idx, &elem) in row.iter().enumerate() {
@@ -250,16 +251,26 @@ impl App<Opt> for HashlifeVisualizer {
         let mut tri_builder = GraphicsBuilder::new();
 
         // Draw steps
-        for cell in life.macrocells() {
+        for (handle, cell) in life.macrocells() {
             let width = 1 << cell.n;
             if let Some((tl, dt)) = cell.creation_coord {
                 let dt = dt.max(1);
 
-                let rect = (tl, (tl.0 + width, tl.0 + width));
+                let rect = (tl, (tl.0 + width, tl.1 + width));
 
                 let y = time_to_graphics(dt);
 
                 draw_rect(&mut line_builder, rect, [1.; 3], y);
+
+                let raster = life.raster(handle, square_rect(0, width));
+                raster_to_mesh(
+                    &mut tri_builder,
+                    &raster,
+                    rect,
+                    [1.; 3],
+                    time_to_graphics(dt),
+                );
+
             }
         }
 
