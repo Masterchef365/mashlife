@@ -45,7 +45,7 @@ struct Opt {
     vr: bool,
 }
 
-fn prepare_data(args: &Opt) -> Result<(HashLife, Handle, Handle)> {
+fn prepare_data(args: &Opt) -> Result<(HashLife, Handle, Handle, Rect)> {
     /*
     let rle_name = args
         .rle
@@ -77,7 +77,7 @@ fn prepare_data(args: &Opt) -> Result<(HashLife, Handle, Handle)> {
         (half_width - view_width as i64) / 2,
     );
 
-    //let view_rect = (view_tl, (view_tl.0 + view_width, view_tl.1 + view_width));
+    let view_rect = (view_tl, (view_tl.0 + view_width, view_tl.1 + view_width));
 
     let insert_tl = (
         (half_width - rle_width as i64) / 2 + quarter_width,
@@ -88,53 +88,25 @@ fn prepare_data(args: &Opt) -> Result<(HashLife, Handle, Handle)> {
 
     let result_cell = life.result(input_cell, args.steps, Some(view_tl));
 
-    // Calculate result
     /*
-    for (frame_idx, steps) in (args.steps..)
-        .step_by(args.stride)
-        .take(args.frames)
-        .enumerate()
-    {
-        let begin_time = std::time::Instant::now();
-
-        let handle = life.result(handle, steps, Some((0, 0)));
-
-        let elapsed = begin_time.elapsed();
-        println!("{}: {}ms", steps, elapsed.as_secs_f32() * 1e3);
-
-        if let Some(out_path) = &args.out_path {
-            let raster = life.raster(handle, view_rect);
-
-            // Name image
-            let frame_num = if args.use_step_numbers {
-                steps
-            } else {
-                frame_idx
-            };
-
-            let image_name = if args.use_rle_prefix {
-                format!("{}_{}.png", rle_name, frame_num)
-            } else {
-                format!("{}.png", frame_num)
-            };
-
-            // Write image
-            let pixels = cells_to_pixels(&raster);
-            mashlife::io::write_png(out_path.join(image_name), &pixels, view_width as _)
-                .context("Writing image")?;
-        }
-    }
+    let insert_rect = (
+        insert_tl,
+        (
+            insert_tl.0 + rle_width as i64,
+            insert_tl.1 + rle_height as i64,
+        ),
+    );
     */
 
-    Ok((life, input_cell, result_cell))
+    Ok((life, input_cell, result_cell, view_rect))
 }
 
-fn scale_transform(sc: f32) -> [[f32; 4]; 4] {
+fn scale_transform(xz_scale: f32, y_scale: f32, x: f32, y: f32, z: f32) -> [[f32; 4]; 4] {
     [
-        [sc, 0., 0., 0.],
-        [0., sc, 0., 0.],
-        [0., 0., sc, 0.],
-        [0., 0., 0., 1.],
+        [xz_scale, 0., 0., 0.],
+        [0., y_scale, 0., 0.],
+        [0., 0., xz_scale, 0.],
+        [x, y, z, 1.],
     ]
 }
 
@@ -151,14 +123,17 @@ fn highest_pow_2(mut v: u64) -> u32 {
 }
 
 /// Push a mesh to the graphicsbuilder containing the true cells in the given array with size 2^n
-fn raster_to_mesh(b: &mut GraphicsBuilder, data: &[bool], n: usize, color: [f32; 3], y: f32) {
+fn raster_to_mesh(b: &mut GraphicsBuilder, data: &[bool], rect: Rect, color: [f32; 3], y: f32) {
+    let ((x1, y1), (x2, y2)) = rect;
+    let width = x2 - x1;
+    let height = y2 - y1;
+
     // TODO: Run-length compression for faces
-    let width = 1 << n;
-    assert_eq!(data.len(), width * width);
-    for (row_idx, row) in data.chunks_exact(width).enumerate() {
+    assert_eq!(data.len(), (width * height) as usize);
+    for (row_idx, row) in data.chunks_exact(width as usize).enumerate() {
         for (col_idx, &elem) in row.iter().enumerate() {
             if elem {
-                let (x, z) = (row_idx as i64, col_idx as i64);
+                let (x, z) = (row_idx as i64 + x1, col_idx as i64 + y1);
 
                 let mut push =
                     |x, z| b.push_vertex(Vertex::new(world_to_graphics((x, z), y), color));
@@ -238,6 +213,10 @@ pub fn world_to_graphics((x, z): Coord, y: f32) -> [f32; 3] {
     [x as f32, y, z as f32]
 }
 
+pub fn time_to_graphics(time: usize) -> f32 {
+    (time as f32).log2()
+}
+
 fn main() -> Result<()> {
     let args = Opt::from_args();
     launch::<Opt, HashlifeVisualizer>(Settings::default().vr(args.vr).args(args))
@@ -255,13 +234,42 @@ struct HashlifeVisualizer {
     camera: MultiPlatformCamera,
 }
 
+fn square_rect(corner: i64, width: i64) -> Rect {
+    ((corner, corner), (corner + width, corner + width))
+}
+
 impl App<Opt> for HashlifeVisualizer {
     fn init(ctx: &mut Context, platform: &mut Platform, args: Opt) -> Result<Self> {
         let mut line_builder = GraphicsBuilder::new();
+        let mut tri_builder = GraphicsBuilder::new();
+
         draw_rect(&mut line_builder, ((0, 0), (10, 10)), [1.; 3], 0.);
 
-        let mut tri_builder = GraphicsBuilder::new();
-        raster_to_mesh(&mut tri_builder, &[false, true, true, false], 1, [1.; 3], 10.);
+        // Draw input
+        let (life, input_cell, result_cell, view_rect) = prepare_data(&args)?;
+
+        let input_n = life.macrocell(input_cell).n;
+        let input_rect = square_rect(0, 1 << input_n);
+        let input_raster = life.raster(input_cell, input_rect);
+
+        raster_to_mesh(
+            &mut tri_builder,
+            &input_raster,
+            input_rect,
+            [1.; 3],
+            time_to_graphics(1),
+        );
+
+        // Draw result
+        let result_raster = life.raster(result_cell, view_rect);
+
+        raster_to_mesh(
+            &mut tri_builder,
+            &result_raster,
+            view_rect,
+            [1.; 3],
+            time_to_graphics(args.steps),
+        );
 
         Ok(Self {
             line_verts: ctx.vertices(&line_builder.vertices, false)?,
@@ -284,7 +292,7 @@ impl App<Opt> for HashlifeVisualizer {
     }
 
     fn frame(&mut self, _ctx: &mut Context, _: &mut Platform) -> Result<Vec<DrawCmd>> {
-        let scale = scale_transform(0.1);
+        let scale = scale_transform(0.1, 1., 0., 0., 0.);
         Ok(vec![
             DrawCmd::new(self.line_verts)
                 .indices(self.line_indices)
