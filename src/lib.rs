@@ -163,9 +163,7 @@ impl HashLife {
             return result;
         }
 
-        let quarter_width = 1 << cell.n;
         let (cx, cy) = coord;
-        let result_coord = ((cx + quarter_width, cy + quarter_width), dt);
 
         // Solve 4x4 if we're at n = 2
         let result = if cell_n == 2 {

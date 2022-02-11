@@ -241,11 +241,17 @@ fn square_rect(corner: i64, width: i64) -> Rect {
     ((corner, corner), (corner + width, corner + width))
 }
 
+fn mix(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
+    let mut output = [0.; 3];
+    output.iter_mut().zip(a).zip(b).for_each(|((o, a), b)| *o = a * (1. - t) + b * t);
+    output
+}
+
 impl App<Opt> for HashlifeVisualizer {
     fn init(ctx: &mut Context, platform: &mut Platform, args: Opt) -> Result<Self> {
 
         // Calculate
-        let (life, input_cell, result_cell, view_rect) = prepare_data(&args)?;
+        let (life, input_cell, _result_cell, _view_rect) = prepare_data(&args)?;
 
         let mut line_builder = GraphicsBuilder::new();
         let mut tri_builder = GraphicsBuilder::new();
@@ -256,18 +262,28 @@ impl App<Opt> for HashlifeVisualizer {
             if let Some((tl, dt)) = cell.creation_coord {
                 let dt = dt.max(1);
 
+                let t = dt as f32 / args.steps as f32;
+                let w = 0.5;
+                let t = t.sqrt() * (1. + w) - w;
+
+                let color = mix(
+                    mix([0.512,0.157,1.000], [0.990,0.198,0.103], t),
+                    mix([1.000,0.021,0.446], [0.990,0.903,0.000], t),
+                    t
+                );
+
                 let rect = (tl, (tl.0 + width, tl.1 + width));
 
                 let y = time_to_graphics(dt);
 
-                draw_rect(&mut line_builder, rect, [1.; 3], y);
+                draw_rect(&mut line_builder, rect, color, y);
 
                 let raster = life.raster(handle, square_rect(0, width));
                 raster_to_mesh(
                     &mut tri_builder,
                     &raster,
                     rect,
-                    [1.; 3],
+                    color,
                     time_to_graphics(dt),
                 );
 
@@ -302,6 +318,11 @@ impl App<Opt> for HashlifeVisualizer {
             time_to_graphics(args.steps),
         );
         */
+
+        dbg!(line_builder.vertices.len());
+        dbg!(line_builder.indices.len());
+        dbg!(tri_builder.vertices.len());
+        dbg!(tri_builder.indices.len());
 
         Ok(Self {
             scale,
