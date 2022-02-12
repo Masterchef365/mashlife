@@ -225,14 +225,83 @@ fn main() -> Result<()> {
     launch::<Opt, HashlifeVisualizer>(Settings::default().vr(args.vr).args(args))
 }
 
-struct HashlifeVisualizer {
-    line_verts: VertexBuffer,
-    line_indices: IndexBuffer,
-    line_shader: Shader,
+struct ExpandableMesh {
+    vertices: VertexBuffer,
+    indices: IndexBuffer,
+    index_capacity: usize,
+    vertex_capacity: usize,
+    index_count: u32,
+}
 
-    tri_verts: VertexBuffer,
-    tri_indices: IndexBuffer,
+const ZERO_VERTEX: Vertex = Vertex {
+    pos: [0.; 3],
+    color: [0.; 3],
+};
+
+impl ExpandableMesh {
+    pub fn new(ctx: &mut Context) -> Result<Self> {
+        Self::with_capacity(ctx, 1024, 1024)
+    }
+
+    pub fn with_capacity(ctx: &mut Context, vertices: usize, indices: usize) -> Result<Self> {
+        Ok(Self {
+            vertices: ctx.vertices(&vec![ZERO_VERTEX; vertices], true)?,
+            indices: ctx.indices(&vec![0; indices], true)?,
+            index_capacity: indices,
+            vertex_capacity: vertices,
+            index_count: 0,
+        })
+    }
+
+    pub fn update_indices(&mut self, ctx: &mut Context, indices: &[u32]) -> Result<()> {
+        self.index_count = indices.len() as u32;
+        if indices.len() > self.index_capacity {
+            self.index_capacity = 2 * indices.len(); // That oughtta hold em
+
+            // TODO: Delete the old buffer!
+
+            let mut new_indices = vec![0; self.index_capacity];
+            new_indices[..indices.len()].copy_from_slice(indices);
+            self.indices = ctx.indices(&new_indices, true)?;
+            Ok(())
+        } else {
+            ctx.update_indices(self.indices, indices)
+        }
+    }
+
+    pub fn update_vertices(&mut self, ctx: &mut Context, vertices: &[Vertex]) -> Result<()> {
+        if vertices.len() > self.index_capacity {
+            self.vertex_capacity = 2 * vertices.len(); // That oughtta hold em
+
+            // TODO: Delete the old buffer!
+
+            let mut new_vertices = vec![ZERO_VERTEX; self.vertex_capacity];
+            new_vertices[..vertices.len()].copy_from_slice(vertices);
+            self.vertices = ctx.vertices(&new_vertices, true)?;
+            Ok(())
+        } else {
+            ctx.update_vertices(self.vertices, vertices)
+        }
+    }
+
+    pub fn update_from_graphics_builder(&mut self, ctx: &mut Context, b: &GraphicsBuilder) -> Result<()> {
+        self.update_vertices(ctx, &b.vertices)?;
+        self.update_indices(ctx, &b.indices)
+    }
+
+    pub fn draw(&self) -> DrawCmd {
+        DrawCmd::new(self.vertices)
+            .indices(self.indices)
+            .limit(self.index_count)
+    }
+}
+
+struct HashlifeVisualizer {
+    lines: ExpandableMesh,
+    tris: ExpandableMesh,
+
     tri_shader: Shader,
+    line_shader: Shader,
 
     camera: MultiPlatformCamera,
 
@@ -359,35 +428,41 @@ impl App<Opt> for HashlifeVisualizer {
         dbg!(tri_builder.vertices.len());
         dbg!(tri_builder.indices.len());
 
+        let mut lines = ExpandableMesh::new(ctx)?;
+        let mut tris = ExpandableMesh::new(ctx)?;
+
+        lines.update_from_graphics_builder(ctx, &line_builder)?;
+        tris.update_from_graphics_builder(ctx, &tri_builder)?;
+
         Ok(Self {
             scale,
-            line_verts: ctx.vertices(&line_builder.vertices, false)?,
-            line_indices: ctx.indices(&line_builder.indices, false)?,
+            lines,
+            tris,
+
             line_shader: ctx.shader(
                 DEFAULT_VERTEX_SHADER,
                 DEFAULT_FRAGMENT_SHADER,
                 Primitive::Lines,
             )?,
 
-            tri_verts: ctx.vertices(&tri_builder.vertices, false)?,
-            tri_indices: ctx.indices(&tri_builder.indices, false)?,
             tri_shader: ctx.shader(
                 DEFAULT_VERTEX_SHADER,
                 DEFAULT_FRAGMENT_SHADER,
                 Primitive::Triangles,
             )?,
+
             camera: MultiPlatformCamera::new(platform),
         })
     }
 
     fn frame(&mut self, _ctx: &mut Context, _: &mut Platform) -> Result<Vec<DrawCmd>> {
         Ok(vec![
-            DrawCmd::new(self.line_verts)
-                .indices(self.line_indices)
+            self.lines
+                .draw()
                 .shader(self.line_shader)
                 .transform(self.scale),
-            DrawCmd::new(self.tri_verts)
-                .indices(self.tri_indices)
+            self.tris
+                .draw()
                 .shader(self.tri_shader)
                 .transform(self.scale),
         ])
