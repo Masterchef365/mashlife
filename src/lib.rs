@@ -399,16 +399,16 @@ fn solve_3x3([a, b, c, d, e, f, g, h, i]: [Handle; 9], rules: &Rules) -> Handle 
 
 #[derive(Copy, Clone, Debug)]
 pub struct Rules {
-    survive: [bool; 8],
-    born: [bool; 8],
+    survive: [bool; 9],
+    born: [bool; 9],
 }
 
 impl Rules {
     pub fn execute(&self, center: bool, neighbors: usize) -> bool {
         if center {
-            neighbors.checked_sub(1).map(|n| self.survive[n]).unwrap_or(false)
+            self.survive[neighbors]
         } else {
-            neighbors.checked_sub(1).map(|n| self.born[n]).unwrap_or(false)
+            self.born[neighbors]
         }
     }
 }
@@ -432,17 +432,15 @@ impl FromStr for Rules {
             .ok_or_else(|| "Empty rule".to_string())?
             .trim_start_matches('S');
 
-        let to_rule_array = |s: &str| -> Result<[bool; 8], String> {
-            let mut rules = [false; 8];
+        let to_rule_array = |s: &str| -> Result<[bool; 9], String> {
+            let mut rules = [false; 9];
             for c in s.chars() {
                 if c.is_digit(10) {
                     let dig = c as u8 - b'0';
-                    let dig = dig - 1;
                     let dig = dig as usize;
                     if dig < rules.len() {
                         rules[dig] = true;
                     } else {
-                        let dig = dig + 1;
                         return Err(format!("{dig} is not valid in a rule string"));
                     }
                 }
