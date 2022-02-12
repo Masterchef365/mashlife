@@ -270,7 +270,7 @@ impl ExpandableMesh {
     }
 
     pub fn update_vertices(&mut self, ctx: &mut Context, vertices: &[Vertex]) -> Result<()> {
-        if vertices.len() > self.index_capacity {
+        if vertices.len() > self.vertex_capacity {
             self.vertex_capacity = 2 * vertices.len(); // That oughtta hold em
 
             // TODO: Delete the old buffer!
@@ -284,7 +284,11 @@ impl ExpandableMesh {
         }
     }
 
-    pub fn update_from_graphics_builder(&mut self, ctx: &mut Context, b: &GraphicsBuilder) -> Result<()> {
+    pub fn update_from_graphics_builder(
+        &mut self,
+        ctx: &mut Context,
+        b: &GraphicsBuilder,
+    ) -> Result<()> {
         self.update_vertices(ctx, &b.vertices)?;
         self.update_indices(ctx, &b.indices)
     }
@@ -305,7 +309,121 @@ struct HashlifeVisualizer {
 
     camera: MultiPlatformCamera,
 
+    frame: usize,
+
+    args: Opt,
+
     scale: [[f32; 4]; 4],
+}
+
+impl App<Opt> for HashlifeVisualizer {
+    fn init(ctx: &mut Context, platform: &mut Platform, args: Opt) -> Result<Self> {
+        // Calculate
+        let (life, input_cell, result_cell, view_rect) = prepare_data(&args)?;
+
+        let (line_builder, tri_builder, scale) =
+            draw_cells(&life, input_cell, result_cell, view_rect, args.steps);
+
+        let mut lines = ExpandableMesh::new(ctx)?;
+        let mut tris = ExpandableMesh::new(ctx)?;
+
+        lines.update_from_graphics_builder(ctx, &line_builder)?;
+        tris.update_from_graphics_builder(ctx, &tri_builder)?;
+
+        Ok(Self {
+            scale,
+            lines,
+            tris,
+            args,
+
+            line_shader: ctx.shader(
+                DEFAULT_VERTEX_SHADER,
+                DEFAULT_FRAGMENT_SHADER,
+                Primitive::Lines,
+            )?,
+
+            frame: 0,
+
+            tri_shader: ctx.shader(
+                DEFAULT_VERTEX_SHADER,
+                DEFAULT_FRAGMENT_SHADER,
+                Primitive::Triangles,
+            )?,
+
+            camera: MultiPlatformCamera::new(platform),
+        })
+    }
+
+    fn frame(&mut self, ctx: &mut Context, _: &mut Platform) -> Result<Vec<DrawCmd>> {
+        self.frame += 1;
+
+        if self.frame % 10 == 0 {
+            // Calculate
+            let (life, input_cell, result_cell, view_rect) = prepare_data(&self.args)?;
+
+            let (line_builder, tri_builder, scale) =
+                draw_cells(&life, input_cell, result_cell, view_rect, self.args.steps);
+
+            dbg!(line_builder.vertices.len());
+            dbg!(line_builder.indices.len());
+            dbg!(tri_builder.vertices.len());
+            dbg!(tri_builder.indices.len());
+
+            self.lines
+                .update_from_graphics_builder(ctx, &line_builder)?;
+            self.tris.update_from_graphics_builder(ctx, &tri_builder)?;
+            self.scale = scale;
+
+            self.args.steps += 1;
+        }
+
+        Ok(vec![
+            self.lines
+                .draw()
+                .shader(self.line_shader)
+                .transform(self.scale),
+            self.tris
+                .draw()
+                .shader(self.tri_shader)
+                .transform(self.scale),
+        ])
+    }
+
+    fn event(
+        &mut self,
+        ctx: &mut Context,
+        platform: &mut Platform,
+        mut event: Event,
+    ) -> Result<()> {
+        if self.camera.handle_event(&mut event) {
+            ctx.set_camera_prefix(self.camera.get_prefix())
+        }
+        idek::close_when_asked(platform, &event);
+
+        use idek::winit::event::{
+            ElementState, Event as WinitEvent, KeyboardInput, VirtualKeyCode, WindowEvent,
+        };
+        if let Event::Winit(WinitEvent::WindowEvent {
+            event:
+                WindowEvent::KeyboardInput {
+                    input:
+                        KeyboardInput {
+                            state,
+                            virtual_keycode,
+                            ..
+                        },
+                    ..
+                },
+            ..
+        }) = event
+        {
+            if *state == ElementState::Pressed {
+                //if virtual_keycode = Some(VirtualKeyCode::
+            }
+        }
+
+        Ok(())
+    }
 }
 
 fn square_rect(corner: i64, width: i64) -> Rect {
@@ -322,7 +440,13 @@ fn mix(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
     output
 }
 
-fn draw_cells(life: &HashLife, input_cell: Handle, result_cell: Handle, view_rect: Rect, steps: usize) -> (GraphicsBuilder, GraphicsBuilder, [[f32; 4]; 4]) {
+fn draw_cells(
+    life: &HashLife,
+    input_cell: Handle,
+    _result_cell: Handle,
+    _view_rect: Rect,
+    steps: usize,
+) -> (GraphicsBuilder, GraphicsBuilder, [[f32; 4]; 4]) {
     let mut line_builder = GraphicsBuilder::new();
     let mut tri_builder = GraphicsBuilder::new();
 
@@ -365,10 +489,10 @@ fn draw_cells(life: &HashLife, input_cell: Handle, result_cell: Handle, view_rec
 
             //if level_rng.gen_bool(0.1) {
             /*
-               if rand::thread_rng().gen_bool(0.1) {
-               color = [0.; 3];
-               }
-               */
+            if rand::thread_rng().gen_bool(0.1) {
+            color = [0.; 3];
+            }
+            */
 
             let rect = (tl, (tl.0 + width, tl.1 + width));
 
@@ -379,126 +503,39 @@ fn draw_cells(life: &HashLife, input_cell: Handle, result_cell: Handle, view_rec
             let raster = life.raster(handle, square_rect(0, width));
             raster_to_mesh(&mut tri_builder, &raster, rect, color, y);
         }
-        }
-
-        // Draw input
-        let input_n = life.macrocell(input_cell).n;
-        let input_rect = square_rect(0, 1 << input_n);
-        let input_raster = life.raster(input_cell, input_rect);
-
-        raster_to_mesh(
-            &mut tri_builder,
-            &input_raster,
-            input_rect,
-            [1.; 3],
-            time_to_graphics(1),
-        );
-
-        let half_width = 1 << input_n - 1;
-
-        let offset = half_width as f32;
-        let scale = scale_transform(0.1, 3., -offset, 0., -offset);
-
-        // Draw result
-        //let result_raster = life.raster(result_cell, view_rect);
-        /*
-           let result_raster = life.raster(result_cell, view_rect);
-
-           raster_to_mesh(
-           &mut tri_builder,
-           &result_raster,
-           view_rect,
-           [1.; 3],
-           time_to_graphics(args.steps),
-           );
-           */
-
-        (line_builder, tri_builder, scale)
     }
 
-impl App<Opt> for HashlifeVisualizer {
-    fn init(ctx: &mut Context, platform: &mut Platform, args: Opt) -> Result<Self> {
-        // Calculate
-        let (life, input_cell, result_cell, view_rect) = prepare_data(&args)?;
+    // Draw input
+    let input_n = life.macrocell(input_cell).n;
+    let input_rect = square_rect(0, 1 << input_n);
+    let input_raster = life.raster(input_cell, input_rect);
 
-        let (line_builder, tri_builder, scale) = draw_cells(&life, input_cell, result_cell, view_rect, args.steps);
+    raster_to_mesh(
+        &mut tri_builder,
+        &input_raster,
+        input_rect,
+        [1.; 3],
+        time_to_graphics(1),
+    );
 
-        dbg!(line_builder.vertices.len());
-        dbg!(line_builder.indices.len());
-        dbg!(tri_builder.vertices.len());
-        dbg!(tri_builder.indices.len());
+    let half_width = 1 << input_n - 1;
 
-        let mut lines = ExpandableMesh::new(ctx)?;
-        let mut tris = ExpandableMesh::new(ctx)?;
+    let offset = half_width as f32;
+    let scale = scale_transform(0.1, 3., -offset, 0., -offset);
 
-        lines.update_from_graphics_builder(ctx, &line_builder)?;
-        tris.update_from_graphics_builder(ctx, &tri_builder)?;
+    // Draw result
+    //let result_raster = life.raster(result_cell, view_rect);
+    /*
+    let result_raster = life.raster(result_cell, view_rect);
 
-        Ok(Self {
-            scale,
-            lines,
-            tris,
+    raster_to_mesh(
+    &mut tri_builder,
+    &result_raster,
+    view_rect,
+    [1.; 3],
+    time_to_graphics(args.steps),
+    );
+    */
 
-            line_shader: ctx.shader(
-                DEFAULT_VERTEX_SHADER,
-                DEFAULT_FRAGMENT_SHADER,
-                Primitive::Lines,
-            )?,
-
-            tri_shader: ctx.shader(
-                DEFAULT_VERTEX_SHADER,
-                DEFAULT_FRAGMENT_SHADER,
-                Primitive::Triangles,
-            )?,
-
-            camera: MultiPlatformCamera::new(platform),
-        })
-    }
-
-    fn frame(&mut self, _ctx: &mut Context, _: &mut Platform) -> Result<Vec<DrawCmd>> {
-        Ok(vec![
-            self.lines
-                .draw()
-                .shader(self.line_shader)
-                .transform(self.scale),
-            self.tris
-                .draw()
-                .shader(self.tri_shader)
-                .transform(self.scale),
-        ])
-    }
-
-    fn event(
-        &mut self,
-        ctx: &mut Context,
-        platform: &mut Platform,
-        mut event: Event,
-    ) -> Result<()> {
-        if self.camera.handle_event(&mut event) {
-            ctx.set_camera_prefix(self.camera.get_prefix())
-        }
-        idek::close_when_asked(platform, &event);
-
-        use idek::winit::event::{Event as WinitEvent, KeyboardInput, VirtualKeyCode, WindowEvent, ElementState};
-        if let Event::Winit(WinitEvent::WindowEvent {
-            event:
-                WindowEvent::KeyboardInput {
-                    input:
-                        KeyboardInput {
-                            state,
-                            virtual_keycode,
-                            ..
-                        },
-                    ..
-                },
-            ..
-        }) = event
-        {
-            if *state == ElementState::Pressed {
-                //if virtual_keycode = Some(VirtualKeyCode::
-            }
-        }
-
-        Ok(())
-    }
+    (line_builder, tri_builder, scale)
 }
