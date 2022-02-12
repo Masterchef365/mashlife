@@ -17,25 +17,9 @@ struct Opt {
     #[structopt(short, long, default_value = "8")]
     steps: usize,
 
-    /// Output file path
-    #[structopt(short, long)]
-    out_path: Option<PathBuf>,
-
     /// Animation step stride
     #[structopt(long, default_value = "1")]
     stride: usize,
-
-    /// Number of frames to render
-    #[structopt(short, long, default_value = "1")]
-    frames: usize,
-
-    /// Use the RLE file as the file name prefix
-    #[structopt(short, long)]
-    use_rle_prefix: bool,
-
-    /// Use step numbers instead of frame numbers
-    #[structopt(long)]
-    use_step_numbers: bool,
 
     /// Use the specified output width, as opposed the default view
     #[structopt(short, long)]
@@ -44,6 +28,9 @@ struct Opt {
     /// Visualize with VR
     #[structopt(long)]
     vr: bool,
+
+    #[structopt(short, long)]
+    rects: bool,
 }
 
 fn prepare_data(args: &Opt) -> Result<(HashLife, Handle, Handle, Rect)> {
@@ -61,8 +48,7 @@ fn prepare_data(args: &Opt) -> Result<(HashLife, Handle, Handle, Rect)> {
     let rle_height = rle.len() / rle_width;
 
     let max_rle_dim = rle_height.max(rle_width);
-    let largest_num_steps = args.steps + args.stride * (args.frames - 1);
-    let n = highest_pow_2(max_rle_dim as _).max(highest_pow_2(largest_num_steps as u64) + 2);
+    let n = highest_pow_2(max_rle_dim as _).max(highest_pow_2(args.steps as u64) + 2);
 
     // Create simulation
     let mut life = HashLife::new();
@@ -322,7 +308,7 @@ impl App<Opt> for HashlifeVisualizer {
         let (life, input_cell, result_cell, view_rect) = prepare_data(&args)?;
 
         let (line_builder, tri_builder, scale) =
-            draw_cells(&life, input_cell, result_cell, view_rect, args.steps);
+            draw_cells(&life, input_cell, result_cell, view_rect, &args);
 
         let mut lines = ExpandableMesh::new(ctx)?;
         let mut tris = ExpandableMesh::new(ctx)?;
@@ -362,7 +348,7 @@ impl App<Opt> for HashlifeVisualizer {
             let (life, input_cell, result_cell, view_rect) = prepare_data(&self.args)?;
 
             let (line_builder, tri_builder, scale) =
-                draw_cells(&life, input_cell, result_cell, view_rect, self.args.steps);
+                draw_cells(&life, input_cell, result_cell, view_rect, &self.args);
 
             dbg!(line_builder.vertices.len());
             dbg!(line_builder.indices.len());
@@ -374,7 +360,7 @@ impl App<Opt> for HashlifeVisualizer {
             self.tris.update_from_graphics_builder(ctx, &tri_builder)?;
             self.scale = scale;
 
-            self.args.steps += 1;
+            self.args.steps += self.args.stride;
         }
 
         Ok(vec![
@@ -445,7 +431,7 @@ fn draw_cells(
     input_cell: Handle,
     _result_cell: Handle,
     _view_rect: Rect,
-    steps: usize,
+    args: &Opt,
 ) -> (GraphicsBuilder, GraphicsBuilder, [[f32; 4]; 4]) {
     let mut line_builder = GraphicsBuilder::new();
     let mut tri_builder = GraphicsBuilder::new();
@@ -468,7 +454,7 @@ fn draw_cells(
     for (handle, cell) in life.macrocells() {
         let width = 1 << cell.n;
         if let Some((tl, time)) = cell.creation_coord {
-            let t = time as f32 / steps as f32;
+            let t = time as f32 / args.steps as f32;
             let w = 0.3;
             let t = t.sqrt() * (1. + w) - w;
 
@@ -498,7 +484,9 @@ fn draw_cells(
 
             let y = time_to_graphics(time);
 
-            //draw_rect(&mut line_builder, rect, color, y);
+            if args.rects {
+                draw_rect(&mut line_builder, rect, color, y);
+            }
 
             let raster = life.raster(handle, square_rect(0, width));
             raster_to_mesh(&mut tri_builder, &raster, rect, color, y);
