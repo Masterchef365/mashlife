@@ -3,9 +3,9 @@ use idek::prelude::*;
 use idek::{prelude::*, IndexBuffer, MultiPlatformCamera};
 use mashlife::io::cells_to_pixels;
 use mashlife::{Coord, Handle, HashLife, Rect};
+use rand::prelude::*;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use rand::prelude::*;
 
 #[derive(Debug, StructOpt, Default)]
 #[structopt(name = "MashLife", about = "Mashes life")]
@@ -253,62 +253,63 @@ fn mix(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
     output
 }
 
-impl App<Opt> for HashlifeVisualizer {
-    fn init(ctx: &mut Context, platform: &mut Platform, args: Opt) -> Result<Self> {
-        // Calculate
-        let (life, input_cell, result_cell, view_rect) = prepare_data(&args)?;
+fn draw_cells(life: &HashLife, input_cell: Handle, result_cell: Handle, view_rect: Rect, steps: usize) -> (GraphicsBuilder, GraphicsBuilder, [[f32; 4]; 4]) {
+    let mut line_builder = GraphicsBuilder::new();
+    let mut tri_builder = GraphicsBuilder::new();
 
-        let mut line_builder = GraphicsBuilder::new();
-        let mut tri_builder = GraphicsBuilder::new();
+    draw_rect(
+        &mut line_builder,
+        square_rect(0, life.macrocell(input_cell).n as _),
+        [1.; 3],
+        0.,
+    );
 
-        draw_rect(&mut line_builder, square_rect(0, life.macrocell(input_cell).n as _), [1.; 3], 0.);
+    let want = 99_999;
+    let have = life.macrocells().count();
+    let p = 1. - (want as f64 / have as f64).clamp(0., 1.);
+    dbg!(want, have, p);
 
-        let want = 99_999;
-        let have = life.macrocells().count();
-        let p = 1. - (want as f64 / have as f64).clamp(0., 1.);
-        dbg!(want, have, p);
+    let mut rng = rand::thread_rng();
 
-        let mut rng = rand::thread_rng();
+    // Draw steps
+    for (handle, cell) in life.macrocells() {
+        let width = 1 << cell.n;
+        if let Some((tl, time)) = cell.creation_coord {
+            let t = time as f32 / steps as f32;
+            let w = 0.3;
+            let t = t.sqrt() * (1. + w) - w;
 
-        // Draw steps
-        for (handle, cell) in life.macrocells() {
-            let width = 1 << cell.n;
-            if let Some((tl, time)) = cell.creation_coord {
-                let t = time as f32 / args.steps as f32;
-                let w = 0.3;
-                let t = t.sqrt() * (1. + w) - w;
-
-                //
-                //if (time as f32).log2() as u32 % 5 != 0 {
-                if rng.gen_bool(p) {
-                    continue;
-                }
-
-                let mut level_rng = rand::rngs::SmallRng::seed_from_u64(time as u64);
-                let t = t + level_rng.gen_range(-1.0..=1.0) * 0.25;
-
-                let color = mix(
-                    mix([0.002, 0.591, 0.990], [0.823, 0.162, 1.000], t),
-                    mix([0.881, 0.190, 0.990], [1.000, 0.420, 0.098], t),
-                    t,
-                );
-
-                //if level_rng.gen_bool(0.1) {
-                /*
-                if rand::thread_rng().gen_bool(0.1) {
-                    color = [0.; 3];
-                }
-                */
-
-                let rect = (tl, (tl.0 + width, tl.1 + width));
-
-                let y = time_to_graphics(time);
-
-                //draw_rect(&mut line_builder, rect, color, y);
-
-                let raster = life.raster(handle, square_rect(0, width));
-                raster_to_mesh(&mut tri_builder, &raster, rect, color, y);
+            //
+            //if (time as f32).log2() as u32 % 5 != 0 {
+            if rng.gen_bool(p) {
+                continue;
             }
+
+            let mut level_rng = rand::rngs::SmallRng::seed_from_u64(time as u64);
+            let t = t + level_rng.gen_range(-1.0..=1.0) * 0.25;
+
+            let color = mix(
+                mix([0.002, 0.591, 0.990], [0.823, 0.162, 1.000], t),
+                mix([0.881, 0.190, 0.990], [1.000, 0.420, 0.098], t),
+                t,
+            );
+
+            //if level_rng.gen_bool(0.1) {
+            /*
+               if rand::thread_rng().gen_bool(0.1) {
+               color = [0.; 3];
+               }
+               */
+
+            let rect = (tl, (tl.0 + width, tl.1 + width));
+
+            let y = time_to_graphics(time);
+
+            //draw_rect(&mut line_builder, rect, color, y);
+
+            let raster = life.raster(handle, square_rect(0, width));
+            raster_to_mesh(&mut tri_builder, &raster, rect, color, y);
+        }
         }
 
         // Draw input
@@ -331,18 +332,27 @@ impl App<Opt> for HashlifeVisualizer {
 
         // Draw result
         //let result_raster = life.raster(result_cell, view_rect);
-        let result_raster = life.raster(
-            result_cell,
-            view_rect,
-        );
+        /*
+           let result_raster = life.raster(result_cell, view_rect);
 
-        raster_to_mesh(
-            &mut tri_builder,
-            &result_raster,
-            view_rect,
-            [1.; 3],
-            time_to_graphics(args.steps),
-        );
+           raster_to_mesh(
+           &mut tri_builder,
+           &result_raster,
+           view_rect,
+           [1.; 3],
+           time_to_graphics(args.steps),
+           );
+           */
+
+        (line_builder, tri_builder, scale)
+    }
+
+impl App<Opt> for HashlifeVisualizer {
+    fn init(ctx: &mut Context, platform: &mut Platform, args: Opt) -> Result<Self> {
+        // Calculate
+        let (life, input_cell, result_cell, view_rect) = prepare_data(&args)?;
+
+        let (line_builder, tri_builder, scale) = draw_cells(&life, input_cell, result_cell, view_rect, args.steps);
 
         dbg!(line_builder.vertices.len());
         dbg!(line_builder.indices.len());
@@ -393,6 +403,27 @@ impl App<Opt> for HashlifeVisualizer {
             ctx.set_camera_prefix(self.camera.get_prefix())
         }
         idek::close_when_asked(platform, &event);
+
+        use idek::winit::event::{Event as WinitEvent, KeyboardInput, VirtualKeyCode, WindowEvent, ElementState};
+        if let Event::Winit(WinitEvent::WindowEvent {
+            event:
+                WindowEvent::KeyboardInput {
+                    input:
+                        KeyboardInput {
+                            state,
+                            virtual_keycode,
+                            ..
+                        },
+                    ..
+                },
+            ..
+        }) = event
+        {
+            if *state == ElementState::Pressed {
+                //if virtual_keycode = Some(VirtualKeyCode::
+            }
+        }
+
         Ok(())
     }
 }
