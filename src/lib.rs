@@ -142,7 +142,7 @@ impl HashLife {
 
     /// Returns the given macro`cell` advanced by the given number of `steps` (up to and including
     /// 2^(n-2) where 2^n is the width of the cell
-    pub fn result(&mut self, handle: Handle, dt: usize, coord: Coord) -> Handle {
+    pub fn result(&mut self, handle: Handle, dt: usize, coord: Coord, time: usize) -> Handle {
         // Fast-path for zeroes
         if handle.0 == 0 {
             return handle;
@@ -224,7 +224,7 @@ impl HashLife {
             */
 
             let [q, r, s, t, u, v, w, x, y] =
-                middle_3x3.map(|(coord, handle)| self.result(handle, dt_1, coord));
+                middle_3x3.map(|(coord, handle)| self.result(handle, dt_1, coord, time));
 
             let iic = |u, v| (gt + u * gt + cx, gt + v * gt + cy);
 
@@ -238,10 +238,10 @@ impl HashLife {
                 .map(|(coord, subcells)| (coord, self.insert_cell(subcells, cell_n - 1, None)));
 
             // Compute results or passthroughs for child nodes
-            let result = middle_2x2.map(|(coord, handle)| self.result(handle, dt_2, coord));
+            let result = middle_2x2.map(|(coord, handle)| self.result(handle, dt_2, coord, time + dt_1));
 
             // Save the result
-            self.insert_cell(result, cell_n - 1, Some(((cx + ch, cy + ch), dt)))
+            self.insert_cell(result, cell_n - 1, Some(((cx + ch, cy + ch), time)))
         };
 
         self.macrocell_mut(handle).result.insert(dt, result);

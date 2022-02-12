@@ -86,7 +86,7 @@ fn prepare_data(args: &Opt) -> Result<(HashLife, Handle, Handle, Rect)> {
 
     let input_cell = life.insert_array(&rle, rle_width, insert_tl, n as _);
 
-    let result_cell = life.result(input_cell, args.steps, (-quarter_width, -quarter_width));
+    let result_cell = life.result(input_cell, args.steps, (-quarter_width, -quarter_width), 0);
 
     /*
     let insert_rect = (
@@ -243,13 +243,16 @@ fn square_rect(corner: i64, width: i64) -> Rect {
 
 fn mix(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
     let mut output = [0.; 3];
-    output.iter_mut().zip(a).zip(b).for_each(|((o, a), b)| *o = a * (1. - t) + b * t);
+    output
+        .iter_mut()
+        .zip(a)
+        .zip(b)
+        .for_each(|((o, a), b)| *o = a * (1. - t) + b * t);
     output
 }
 
 impl App<Opt> for HashlifeVisualizer {
     fn init(ctx: &mut Context, platform: &mut Platform, args: Opt) -> Result<Self> {
-
         // Calculate
         let (life, input_cell, _result_cell, _view_rect) = prepare_data(&args)?;
 
@@ -267,9 +270,9 @@ impl App<Opt> for HashlifeVisualizer {
                 let t = t.sqrt() * (1. + w) - w;
 
                 let color = mix(
-                    mix([0.002,0.591,0.990], [0.823,0.162,1.000], t),
-                    mix([0.881,0.190,0.990], [1.000,0.420,0.098], t),
-                    t
+                    mix([0.002, 0.591, 0.990], [0.823, 0.162, 1.000], t),
+                    mix([0.881, 0.190, 0.990], [1.000, 0.420, 0.098], t),
+                    t,
                 );
 
                 let rect = (tl, (tl.0 + width, tl.1 + width));
@@ -279,14 +282,7 @@ impl App<Opt> for HashlifeVisualizer {
                 draw_rect(&mut line_builder, rect, color, y);
 
                 let raster = life.raster(handle, square_rect(0, width));
-                raster_to_mesh(
-                    &mut tri_builder,
-                    &raster,
-                    rect,
-                    color,
-                    time_to_graphics(dt),
-                );
-
+                raster_to_mesh(&mut tri_builder, &raster, rect, color, time_to_graphics(dt));
             }
         }
 
