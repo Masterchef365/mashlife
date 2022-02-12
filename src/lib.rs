@@ -114,7 +114,8 @@ impl HashLife {
         let children = subcoords(tl_corner, n - 1)
             .map(|sub_corner| self.insert_rect(input, sub_corner, input_rect, n - 1));
 
-        self.insert_cell(children, n, Some((tl_corner, 0)))
+        //self.insert_cell(children, n, Some((tl_corner, 0)))
+        self.insert_cell(children, n, None)
     }
 
     fn insert_cell(
@@ -224,7 +225,7 @@ impl HashLife {
             */
 
             let [q, r, s, t, u, v, w, x, y] =
-                middle_3x3.map(|(coord, handle)| self.result(handle, dt_1, coord, time));
+                middle_3x3.map(|(coord, handle)| self.result(handle, dt_1, coord, time + 1));
 
             let iic = |u, v| (gt + u * gt + cx, gt + v * gt + cy);
 
@@ -241,7 +242,7 @@ impl HashLife {
             let result = middle_2x2.map(|(coord, handle)| self.result(handle, dt_2, coord, time + dt_1));
 
             // Save the result
-            self.insert_cell(result, cell_n - 1, Some(((cx + ch, cy + ch), time)))
+            self.insert_cell(result, cell_n - 1, Some(((cx + ch, cy + ch), time + dt)))
         };
 
         self.macrocell_mut(handle).result.insert(dt, result);

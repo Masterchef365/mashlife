@@ -5,6 +5,7 @@ use mashlife::io::cells_to_pixels;
 use mashlife::{Coord, Handle, HashLife, Rect};
 use std::path::PathBuf;
 use structopt::StructOpt;
+use rand::prelude::*;
 
 #[derive(Debug, StructOpt, Default)]
 #[structopt(name = "MashLife", about = "Mashes life")]
@@ -215,7 +216,8 @@ pub fn world_to_graphics((x, z): Coord, y: f32) -> [f32; 3] {
 }
 
 pub fn time_to_graphics(time: usize) -> f32 {
-    (time as f32).log2()
+    (time as f32).max(1e-5).log2()
+    //time as f32
 }
 
 fn main() -> Result<()> {
@@ -254,20 +256,22 @@ fn mix(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
 impl App<Opt> for HashlifeVisualizer {
     fn init(ctx: &mut Context, platform: &mut Platform, args: Opt) -> Result<Self> {
         // Calculate
-        let (life, input_cell, _result_cell, _view_rect) = prepare_data(&args)?;
+        let (life, input_cell, result_cell, view_rect) = prepare_data(&args)?;
 
         let mut line_builder = GraphicsBuilder::new();
         let mut tri_builder = GraphicsBuilder::new();
 
+        draw_rect(&mut line_builder, square_rect(0, life.macrocell(input_cell).n as _), [1.; 3], 0.);
+
         // Draw steps
         for (handle, cell) in life.macrocells() {
             let width = 1 << cell.n;
-            if let Some((tl, dt)) = cell.creation_coord {
-                let dt = dt.max(1);
-
-                let t = dt as f32 / args.steps as f32;
+            if let Some((tl, time)) = cell.creation_coord {
+                let t = time as f32 / args.steps as f32;
                 let w = 0.3;
                 let t = t.sqrt() * (1. + w) - w;
+
+                let t = t + rand::thread_rng().gen_range(-1.0..=1.0) * 0.25;
 
                 let color = mix(
                     mix([0.002, 0.591, 0.990], [0.823, 0.162, 1.000], t),
@@ -277,12 +281,12 @@ impl App<Opt> for HashlifeVisualizer {
 
                 let rect = (tl, (tl.0 + width, tl.1 + width));
 
-                let y = time_to_graphics(dt);
+                let y = time_to_graphics(time);
 
-                draw_rect(&mut line_builder, rect, color, y);
+                //draw_rect(&mut line_builder, rect, color, y);
 
                 let raster = life.raster(handle, square_rect(0, width));
-                raster_to_mesh(&mut tri_builder, &raster, rect, color, time_to_graphics(dt));
+                raster_to_mesh(&mut tri_builder, &raster, rect, color, y);
             }
         }
 
@@ -299,12 +303,21 @@ impl App<Opt> for HashlifeVisualizer {
             time_to_graphics(1),
         );
 
-        let half_width = (1 << input_n - 1) as f32;
-        let scale = scale_transform(0.1, 3., -half_width, 0., -half_width);
+        let half_width = 1 << input_n - 1;
+        let quarter_width = 1 << input_n - 1;
 
-        /*
+        let offset = half_width as f32;
+        let scale = scale_transform(0.1, 3., -offset, 0., -offset);
+
         // Draw result
-        let result_raster = life.raster(result_cell, view_rect);
+        //let result_raster = life.raster(result_cell, view_rect);
+        let result_raster = life.raster(
+            result_cell,
+            (
+                (0, 0),
+                (half_width, half_width),
+            ),
+        );
 
         raster_to_mesh(
             &mut tri_builder,
@@ -313,7 +326,6 @@ impl App<Opt> for HashlifeVisualizer {
             [1.; 3],
             time_to_graphics(args.steps),
         );
-        */
 
         dbg!(line_builder.vertices.len());
         dbg!(line_builder.indices.len());
