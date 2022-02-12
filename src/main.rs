@@ -29,11 +29,17 @@ struct Opt {
     #[structopt(long)]
     vr: bool,
 
+    /// Show quadtree rectangles
     #[structopt(long)]
     rects: bool,
 
+    /// Rule to execute
     #[structopt(short, long, default_value="B3/S23")]
     rule: Rules,
+
+    /// Maximum number of macrocells to visualize
+    #[structopt(short, long, default_value="99999")]
+    max_vis_cells: usize
 }
 
 fn prepare_data(args: &Opt) -> Result<(HashLife, Handle, Handle, Rect)> {
@@ -446,7 +452,7 @@ fn draw_cells(
         0.,
     );
 
-    let want = 99_999;
+    let want = args.max_vis_cells;
     let have = life.macrocells().count();
     let p = 1. - (want as f64 / have as f64).clamp(0., 1.);
     dbg!(want, have, p);
