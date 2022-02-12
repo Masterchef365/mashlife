@@ -211,7 +211,7 @@ pub fn world_to_graphics((x, z): Coord, y: f32) -> [f32; 3] {
 }
 
 pub fn time_to_graphics(time: usize) -> f32 {
-    (time as f32).max(1e-5).log2()
+    -(time as f32).max(1e-5).log2()
     //time as f32
 }
 
@@ -477,8 +477,8 @@ fn draw_cells(
             let t = t + level_rng.gen_range(-1.0..=1.0) * 0.25;
 
             let color = mix(
-                mix([0.002, 0.591, 0.990], [0.823, 0.162, 1.000], t),
-                mix([0.881, 0.190, 0.990], [1.000, 0.420, 0.098], t),
+                mix([1.; 3], [0.823, 0.162, 1.000], t),
+                mix([0.881, 0.190, 0.990], [0.; 3], t),
                 t,
             );
 
