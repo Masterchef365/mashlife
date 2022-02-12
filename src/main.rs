@@ -263,6 +263,13 @@ impl App<Opt> for HashlifeVisualizer {
 
         draw_rect(&mut line_builder, square_rect(0, life.macrocell(input_cell).n as _), [1.; 3], 0.);
 
+        let want = 99_999;
+        let have = life.macrocells().count();
+        let p = 1. - (want as f64 / have as f64).clamp(0., 1.);
+        dbg!(want, have, p);
+
+        let mut rng = rand::thread_rng();
+
         // Draw steps
         for (handle, cell) in life.macrocells() {
             let width = 1 << cell.n;
@@ -271,13 +278,27 @@ impl App<Opt> for HashlifeVisualizer {
                 let w = 0.3;
                 let t = t.sqrt() * (1. + w) - w;
 
-                let t = t + rand::thread_rng().gen_range(-1.0..=1.0) * 0.25;
+                //
+                //if (time as f32).log2() as u32 % 5 != 0 {
+                if rng.gen_bool(p) {
+                    continue;
+                }
+
+                let mut level_rng = rand::rngs::SmallRng::seed_from_u64(time as u64);
+                let t = t + level_rng.gen_range(-1.0..=1.0) * 0.25;
 
                 let color = mix(
                     mix([0.002, 0.591, 0.990], [0.823, 0.162, 1.000], t),
                     mix([0.881, 0.190, 0.990], [1.000, 0.420, 0.098], t),
                     t,
                 );
+
+                //if level_rng.gen_bool(0.1) {
+                /*
+                if rand::thread_rng().gen_bool(0.1) {
+                    color = [0.; 3];
+                }
+                */
 
                 let rect = (tl, (tl.0 + width, tl.1 + width));
 
@@ -304,7 +325,6 @@ impl App<Opt> for HashlifeVisualizer {
         );
 
         let half_width = 1 << input_n - 1;
-        let quarter_width = 1 << input_n - 1;
 
         let offset = half_width as f32;
         let scale = scale_transform(0.1, 3., -offset, 0., -offset);
@@ -313,10 +333,7 @@ impl App<Opt> for HashlifeVisualizer {
         //let result_raster = life.raster(result_cell, view_rect);
         let result_raster = life.raster(
             result_cell,
-            (
-                (0, 0),
-                (half_width, half_width),
-            ),
+            view_rect,
         );
 
         raster_to_mesh(
