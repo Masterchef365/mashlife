@@ -1,5 +1,5 @@
 pub mod io;
-
+use std::str::FromStr;
 use std::collections::HashMap;
 
 // TODO: This assumes you are only using one HashLife instance!!!
@@ -28,11 +28,13 @@ pub struct HashLife {
     parent_cell: HashMap<SubCells, Handle>,
     /// Array of macrocells
     macrocells: Vec<MacroCell>,
+    rules: Rules,
 }
 
 impl HashLife {
-    pub fn new() -> Self {
+    pub fn new(rules: Rules) -> Self {
         Self {
+            rules,
             // Zero always yields zero
             parent_cell: [([Handle(0); 4], Handle(0))].into_iter().collect(),
             macrocells: vec![
@@ -52,8 +54,11 @@ impl HashLife {
         }
     }
 
-    pub fn macrocells(&self) -> impl Iterator<Item=(Handle, &MacroCell)> {
-        self.macrocells.iter().enumerate().map(|(idx, cell)| (Handle(idx), cell))
+    pub fn macrocells(&self) -> impl Iterator<Item = (Handle, &MacroCell)> {
+        self.macrocells
+            .iter()
+            .enumerate()
+            .map(|(idx, cell)| (Handle(idx), cell))
     }
 
     /// Insert the given data with the given width and top-left
@@ -170,7 +175,7 @@ impl HashLife {
         let result = if cell_n == 2 {
             let result = match dt {
                 0 => self.center_passthrough(handle),
-                1 => solve_4x4(self.grandchildren(handle)),
+                1 => solve_4x4(self.grandchildren(handle), &self.rules),
                 _ => panic!("Invalid dt for n = 2"),
             };
             self.insert_cell(result, cell_n - 1, Some(((cx + 1, cy + 1), dt)))
@@ -231,15 +236,16 @@ impl HashLife {
 
             // Get the middle four quadrants of the 3x3 above
             let middle_2x2 = [
-                (iic(0, 0), [q, r, t, u]), 
-                (iic(1, 0), [r, s, u, v]), 
-                (iic(0, 1), [t, u, w, x]), 
-                (iic(1, 1), [u, v, x, y])
+                (iic(0, 0), [q, r, t, u]),
+                (iic(1, 0), [r, s, u, v]),
+                (iic(0, 1), [t, u, w, x]),
+                (iic(1, 1), [u, v, x, y]),
             ]
-                .map(|(coord, subcells)| (coord, self.insert_cell(subcells, cell_n - 1, None)));
+            .map(|(coord, subcells)| (coord, self.insert_cell(subcells, cell_n - 1, None)));
 
             // Compute results or passthroughs for child nodes
-            let result = middle_2x2.map(|(coord, handle)| self.result(handle, dt_2, coord, time + dt_1));
+            let result =
+                middle_2x2.map(|(coord, handle)| self.result(handle, dt_2, coord, time + dt_1));
 
             // Save the result
             self.insert_cell(result, cell_n - 1, Some(((cx + ch, cy + ch), time + dt)))
@@ -370,30 +376,84 @@ fn rect_intersect(a: Rect, b: Rect) -> bool {
 }
 
 /// Solve a 4x4 grid
-fn solve_4x4([[a, b, c, d], [e, f, g, h], [i, j, k, l], [m, n, o, p]]: [SubCells; 4]) -> SubCells {
+fn solve_4x4(
+    [[a, b, c, d], [e, f, g, h], [i, j, k, l], [m, n, o, p]]: [SubCells; 4],
+    rules: &Rules,
+) -> SubCells {
     [
-        solve_3x3([a, b, e, c, d, g, i, j, m]),
-        solve_3x3([b, e, f, d, g, h, j, m, n]),
-        solve_3x3([c, d, g, i, j, m, k, l, o]),
-        solve_3x3([d, g, h, j, m, n, l, o, p]),
+        solve_3x3([a, b, e, c, d, g, i, j, m], rules),
+        solve_3x3([b, e, f, d, g, h, j, m, n], rules),
+        solve_3x3([c, d, g, i, j, m, k, l, o], rules),
+        solve_3x3([d, g, h, j, m, n, l, o, p], rules),
     ]
 }
 
 /// Solve a 3x4 grid
-fn solve_3x3([a, b, c, d, e, f, g, h, i]: [Handle; 9]) -> Handle {
+fn solve_3x3([a, b, c, d, e, f, g, h, i]: [Handle; 9], rules: &Rules) -> Handle {
     let count = [a, b, c, d, f, g, h, i]
         .into_iter()
         .map(|Handle(i)| i)
         .sum();
-    Handle(gol_rules(e.0 != 0, count) as usize)
+    Handle(rules.execute(e.0 != 0, count) as usize)
 }
 
-/// Game of Life rules, otherwise known as B3/S23
-fn gol_rules(center: bool, neighbors: usize) -> bool {
-    match (center, neighbors) {
-        (true, n) if (n == 2 || n == 3) => true,
-        (false, n) if (n == 3) => true,
-        _ => false,
+#[derive(Copy, Clone, Debug)]
+pub struct Rules {
+    survive: [bool; 8],
+    born: [bool; 8],
+}
+
+impl Rules {
+    pub fn execute(&self, center: bool, neighbors: usize) -> bool {
+        if center {
+            neighbors.checked_sub(1).map(|n| self.survive[n]).unwrap_or(false)
+        } else {
+            neighbors.checked_sub(1).map(|n| self.born[n]).unwrap_or(false)
+        }
+    }
+}
+
+impl Default for Rules {
+    fn default() -> Self {
+        Self::from_str("B3/S23").unwrap()
+    }
+}
+
+impl FromStr for Rules {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.split('/');
+        let born = parts
+            .next()
+            .ok_or_else(|| "No slash in rulestring".to_string())?
+            .trim_start_matches('B');
+        let survive = parts
+            .next()
+            .ok_or_else(|| "Empty rule".to_string())?
+            .trim_start_matches('S');
+
+        let to_rule_array = |s: &str| -> Result<[bool; 8], String> {
+            let mut rules = [false; 8];
+            for c in s.chars() {
+                if c.is_digit(10) {
+                    let dig = c as u8 - b'0';
+                    let dig = dig - 1;
+                    let dig = dig as usize;
+                    if dig < rules.len() {
+                        rules[dig] = true;
+                    } else {
+                        let dig = dig + 1;
+                        return Err(format!("{dig} is not valid in a rule string"));
+                    }
+                }
+            }
+            Ok(rules)
+        };
+
+        Ok(dbg!(Self {
+            survive: to_rule_array(survive)?,
+            born: to_rule_array(born)?,
+        }))
     }
 }
 
@@ -405,32 +465,37 @@ pub fn rect_dimensions(((x1, y1), (x2, y2)): Rect) -> (i64, i64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
 
     #[test]
     fn test_solve_4x4() {
+        let rules = Rules::from_str("B3/S23").unwrap();
         assert_eq!(
-            solve_4x4([
+            solve_4x4(
                 [
-                    0, 0, //.
-                    1, 0 //.
-                ]
-                .map(Handle),
-                [
-                    1, 0, //.
-                    1, 0, //.
-                ]
-                .map(Handle),
-                [
-                    0, 1, //.
-                    0, 0, //.
-                ]
-                .map(Handle),
-                [
-                    1, 0, //.
-                    0, 0, //.
-                ]
-                .map(Handle)
-            ]),
+                    [
+                        0, 0, //.
+                        1, 0 //.
+                    ]
+                    .map(Handle),
+                    [
+                        1, 0, //.
+                        1, 0, //.
+                    ]
+                    .map(Handle),
+                    [
+                        0, 1, //.
+                        0, 0, //.
+                    ]
+                    .map(Handle),
+                    [
+                        1, 0, //.
+                        0, 0, //.
+                    ]
+                    .map(Handle)
+                ],
+                &rules
+            ),
             [
                 0, 1, //.
                 1, 1, //.

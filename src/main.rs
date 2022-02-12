@@ -2,7 +2,7 @@ use anyhow::{Context as AnyhowContext, Result};
 use idek::prelude::*;
 use idek::{prelude::*, IndexBuffer, MultiPlatformCamera};
 use mashlife::io::cells_to_pixels;
-use mashlife::{Coord, Handle, HashLife, Rect};
+use mashlife::{Coord, Handle, HashLife, Rect, Rules};
 use rand::prelude::*;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -29,8 +29,11 @@ struct Opt {
     #[structopt(long)]
     vr: bool,
 
-    #[structopt(short, long)]
+    #[structopt(long)]
     rects: bool,
+
+    #[structopt(short, long, default_value="B3/S23")]
+    rule: Rules,
 }
 
 fn prepare_data(args: &Opt) -> Result<(HashLife, Handle, Handle, Rect)> {
@@ -51,7 +54,7 @@ fn prepare_data(args: &Opt) -> Result<(HashLife, Handle, Handle, Rect)> {
     let n = highest_pow_2(max_rle_dim as _).max(highest_pow_2(args.steps as u64) + 2);
 
     // Create simulation
-    let mut life = HashLife::new();
+    let mut life = HashLife::new(args.rule);
 
     // Insert RLE
     let half_width = 1 << n - 1;
@@ -343,7 +346,7 @@ impl App<Opt> for HashlifeVisualizer {
     fn frame(&mut self, ctx: &mut Context, _: &mut Platform) -> Result<Vec<DrawCmd>> {
         self.frame += 1;
 
-        if self.frame % 10 == 0 {
+        if self.frame % 10 == 0 && self.args.stride != 0 {
             // Calculate
             let (life, input_cell, result_cell, view_rect) = prepare_data(&self.args)?;
 
