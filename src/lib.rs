@@ -163,7 +163,7 @@ impl HashLife {
             "Results can only be computed for 4x4 cells and larger"
         );
 
-        assert!(dt <= 1 << cell.n - 2, "dt must be <= 2^(n - 2)");
+        assert!(dt <= 1 << cell.n - 2, "dt ({}) must be <= 2^(n - 2), n={}", dt, cell.n);
 
         // Check if we already know the result
         if let Some(&result) = cell.result.get(&dt) {

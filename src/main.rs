@@ -42,7 +42,12 @@ struct Opt {
     max_vis_cells: usize,
 }
 
-fn prepare_data(args: &Opt, life: &mut HashLife, input_cell: Handle, n: u32) -> Result<(Handle, Rect)> {
+fn prepare_data(
+    args: &Opt,
+    life: &mut HashLife,
+    input_cell: Handle,
+    n: u32,
+) -> Result<(Handle, Rect)> {
     /*
     let rle_name = args
         .rle
@@ -70,7 +75,10 @@ fn prepare_data(args: &Opt, life: &mut HashLife, input_cell: Handle, n: u32) -> 
 
     let start = std::time::Instant::now();
     let result_cell = life.result(input_cell, args.steps, (-quarter_width, -quarter_width), 0);
-    println!("Result calculation took {}ms", start.elapsed().as_secs_f32() * 1e3);
+    println!(
+        "Result calculation took {}ms",
+        start.elapsed().as_secs_f32() * 1e3
+    );
 
     /*
     let insert_rect = (
@@ -303,19 +311,29 @@ struct HashlifeVisualizer {
     scale: [[f32; 4]; 4],
 }
 
-fn calc_frame(args: &Opt, life: &mut HashLife, input_cell: Handle, n: u32) -> Result<(GraphicsBuilder, GraphicsBuilder, [[f32; 4]; 4])> {
+fn calc_frame(
+    args: &Opt,
+    life: &mut HashLife,
+    input_cell: Handle,
+    n: u32,
+) -> Result<(GraphicsBuilder, GraphicsBuilder, [[f32; 4]; 4])> {
     println!();
     let (result_cell, view_rect) = prepare_data(&args, life, input_cell, n)?;
 
     let start = std::time::Instant::now();
-    let (line_builder, tri_builder, scale) = draw_cells(&life, input_cell, result_cell, view_rect, &args);
+    let (line_builder, tri_builder, scale) =
+        draw_cells(&life, input_cell, result_cell, view_rect, &args);
     println!("Mesh build took {}ms", start.elapsed().as_secs_f32() * 1e3);
 
     //dbg!(line_builder.vertices.len());
     //dbg!(line_builder.indices.len());
     //dbg!();
     //dbg!();
-    println!("{} vertices, {} indices", tri_builder.vertices.len(), tri_builder.indices.len());
+    println!(
+        "{} vertices, {} indices",
+        tri_builder.vertices.len(),
+        tri_builder.indices.len()
+    );
 
     Ok((line_builder, tri_builder, scale))
 }
@@ -323,11 +341,14 @@ fn calc_frame(args: &Opt, life: &mut HashLife, input_cell: Handle, n: u32) -> Re
 impl App<Opt> for HashlifeVisualizer {
     fn init(ctx: &mut Context, platform: &mut Platform, args: Opt) -> Result<Self> {
         // Load RLE
-        let (rle, rle_width) = mashlife::io::load_rle(&args.rle).context("Failed to load RLE file")?;
+        let (rle, rle_width) =
+            mashlife::io::load_rle(&args.rle).context("Failed to load RLE file")?;
         let rle_height = rle.len() / rle_width;
 
         let max_rle_dim = rle_height.max(rle_width);
-        let n = highest_pow_2(max_rle_dim as _).max(highest_pow_2(args.steps as u64) + 2);
+        let expected_steps = args.steps as u64 + 12_000 * args.stride.max(1) as u64;
+        let n = highest_pow_2(max_rle_dim as _)
+            .max(highest_pow_2(expected_steps) + 2);
 
         let half_width = 1 << n - 1;
         let quarter_width = 1 << n - 2;
@@ -341,7 +362,10 @@ impl App<Opt> for HashlifeVisualizer {
 
         let start = std::time::Instant::now();
         let input_cell = life.insert_array(&rle, rle_width, insert_tl, n as _);
-        println!("Input insertion took {}ms", start.elapsed().as_secs_f32() * 1e3);
+        println!(
+            "Input insertion took {}ms",
+            start.elapsed().as_secs_f32() * 1e3
+        );
 
         let (line_builder, tri_builder, scale) = calc_frame(&args, &mut life, input_cell, n)?;
 
@@ -386,7 +410,8 @@ impl App<Opt> for HashlifeVisualizer {
         //if self.frame % 10 == 0 && self.args.stride != 0 {
         if self.args.stride != 0 {
             // Calculate
-            let (line_builder, tri_builder, scale) = calc_frame(&self.args, &mut self.life, self.input_cell, self.n)?;
+            let (line_builder, tri_builder, scale) =
+                calc_frame(&self.args, &mut self.life, self.input_cell, self.n)?;
 
             let start = std::time::Instant::now();
             self.lines
