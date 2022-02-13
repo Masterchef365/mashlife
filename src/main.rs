@@ -42,7 +42,7 @@ struct Opt {
     max_vis_cells: usize,
 }
 
-fn prepare_data(args: &Opt) -> Result<(HashLife, Handle, Handle, Rect)> {
+fn prepare_data(args: &Opt, life: &mut HashLife, input_cell: Handle, n: u32) -> Result<(Handle, Rect)> {
     /*
     let rle_name = args
         .rle
@@ -52,15 +52,8 @@ fn prepare_data(args: &Opt) -> Result<(HashLife, Handle, Handle, Rect)> {
         .context("RLE file not utf-8")?;
     */
 
-    // Load RLE
-    let (rle, rle_width) = mashlife::io::load_rle(&args.rle).context("Failed to load RLE file")?;
-    let rle_height = rle.len() / rle_width;
-
-    let max_rle_dim = rle_height.max(rle_width);
-    let n = highest_pow_2(max_rle_dim as _).max(highest_pow_2(args.steps as u64) + 2);
-
     // Create simulation
-    let mut life = HashLife::new(args.rule);
+    //let mut life = HashLife::new(args.rule);
 
     // Insert RLE
     let half_width = 1 << n - 1;
@@ -74,15 +67,6 @@ fn prepare_data(args: &Opt) -> Result<(HashLife, Handle, Handle, Rect)> {
     );
 
     let view_rect = (view_tl, (view_tl.0 + view_width, view_tl.1 + view_width));
-
-    let insert_tl = (
-        (half_width - rle_width as i64) / 2 + quarter_width,
-        (half_width - rle_height as i64) / 2 + quarter_width,
-    );
-
-    let start = std::time::Instant::now();
-    let input_cell = life.insert_array(&rle, rle_width, insert_tl, n as _);
-    println!("Input insertion took {}ms", start.elapsed().as_secs_f32() * 1e3);
 
     let start = std::time::Instant::now();
     let result_cell = life.result(input_cell, args.steps, (-quarter_width, -quarter_width), 0);
@@ -98,7 +82,7 @@ fn prepare_data(args: &Opt) -> Result<(HashLife, Handle, Handle, Rect)> {
     );
     */
 
-    Ok((life, input_cell, result_cell, view_rect))
+    Ok((result_cell, view_rect))
 }
 
 fn scale_transform(xz_scale: f32, y_scale: f32, x: f32, y: f32, z: f32) -> [[f32; 4]; 4] {
@@ -214,7 +198,7 @@ pub fn world_to_graphics((x, z): Coord, y: f32) -> [f32; 3] {
 }
 
 pub fn time_to_graphics(time: usize) -> f32 {
-    -(time as f32).max(1e-5).log2()
+    -(time as f32 / 8.).max(1e-5).log2()
     //time as f32
 }
 
@@ -302,37 +286,64 @@ struct HashlifeVisualizer {
     lines: ExpandableMesh,
     tris: ExpandableMesh,
 
+    life: HashLife,
+
     tri_shader: Shader,
     line_shader: Shader,
 
     camera: MultiPlatformCamera,
 
     frame: usize,
+    n: u32,
 
     args: Opt,
+
+    input_cell: Handle,
 
     scale: [[f32; 4]; 4],
 }
 
-fn calc_frame(args: &Opt) -> Result<(GraphicsBuilder, GraphicsBuilder, [[f32; 4]; 4])> {
-    let (life, input_cell, result_cell, view_rect) = prepare_data(&args)?;
+fn calc_frame(args: &Opt, life: &mut HashLife, input_cell: Handle, n: u32) -> Result<(GraphicsBuilder, GraphicsBuilder, [[f32; 4]; 4])> {
+    println!();
+    let (result_cell, view_rect) = prepare_data(&args, life, input_cell, n)?;
 
     let start = std::time::Instant::now();
     let (line_builder, tri_builder, scale) = draw_cells(&life, input_cell, result_cell, view_rect, &args);
     println!("Mesh build took {}ms", start.elapsed().as_secs_f32() * 1e3);
 
-    dbg!(line_builder.vertices.len());
-    dbg!(line_builder.indices.len());
-    dbg!(tri_builder.vertices.len());
-    dbg!(tri_builder.indices.len());
+    //dbg!(line_builder.vertices.len());
+    //dbg!(line_builder.indices.len());
+    //dbg!();
+    //dbg!();
+    println!("{} vertices, {} indices", tri_builder.vertices.len(), tri_builder.indices.len());
 
     Ok((line_builder, tri_builder, scale))
 }
 
 impl App<Opt> for HashlifeVisualizer {
     fn init(ctx: &mut Context, platform: &mut Platform, args: Opt) -> Result<Self> {
+        // Load RLE
+        let (rle, rle_width) = mashlife::io::load_rle(&args.rle).context("Failed to load RLE file")?;
+        let rle_height = rle.len() / rle_width;
+
+        let max_rle_dim = rle_height.max(rle_width);
+        let n = highest_pow_2(max_rle_dim as _).max(highest_pow_2(args.steps as u64) + 2);
+
+        let half_width = 1 << n - 1;
+        let quarter_width = 1 << n - 2;
+        let insert_tl = (
+            (half_width - rle_width as i64) / 2 + quarter_width,
+            (half_width - rle_height as i64) / 2 + quarter_width,
+        );
+
         // Calculate
-        let (line_builder, tri_builder, scale) = calc_frame(&args)?;
+        let mut life = HashLife::new(args.rule);
+
+        let start = std::time::Instant::now();
+        let input_cell = life.insert_array(&rle, rle_width, insert_tl, n as _);
+        println!("Input insertion took {}ms", start.elapsed().as_secs_f32() * 1e3);
+
+        let (line_builder, tri_builder, scale) = calc_frame(&args, &mut life, input_cell, n)?;
 
         let mut lines = ExpandableMesh::new(ctx)?;
         let mut tris = ExpandableMesh::new(ctx)?;
@@ -343,6 +354,9 @@ impl App<Opt> for HashlifeVisualizer {
         println!("Copy took {}ms", start.elapsed().as_secs_f32() * 1e3);
 
         Ok(Self {
+            n,
+            input_cell,
+            life,
             scale,
             lines,
             tris,
@@ -369,9 +383,10 @@ impl App<Opt> for HashlifeVisualizer {
     fn frame(&mut self, ctx: &mut Context, _: &mut Platform) -> Result<Vec<DrawCmd>> {
         self.frame += 1;
 
-        if self.frame % 10 == 0 && self.args.stride != 0 {
+        //if self.frame % 10 == 0 && self.args.stride != 0 {
+        if self.args.stride != 0 {
             // Calculate
-            let (line_builder, tri_builder, scale) = calc_frame(&self.args)?;
+            let (line_builder, tri_builder, scale) = calc_frame(&self.args, &mut self.life, self.input_cell, self.n)?;
 
             let start = std::time::Instant::now();
             self.lines
@@ -449,8 +464,8 @@ fn mix(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
 
 fn draw_cells(
     life: &HashLife,
-    input_cell: Handle,
-    _result_cell: Handle,
+    _input_cell: Handle,
+    result_cell: Handle,
     _view_rect: Rect,
     args: &Opt,
 ) -> (GraphicsBuilder, GraphicsBuilder, [[f32; 4]; 4]) {
@@ -459,15 +474,16 @@ fn draw_cells(
 
     draw_rect(
         &mut line_builder,
-        square_rect(0, life.macrocell(input_cell).n as _),
+        square_rect(0, life.macrocell(result_cell).n as _),
         [1.; 3],
         0.,
     );
 
+    /*
     let want = args.max_vis_cells;
     let have = life.macrocells().count();
     let p = 1. - (want as f64 / have as f64).clamp(0., 1.);
-    dbg!(want, have, p);
+    //dbg!(want, have, p);
 
     let mut rng = rand::thread_rng();
 
@@ -512,21 +528,22 @@ fn draw_cells(
             raster_to_mesh(&mut tri_builder, &life, handle, rect, color, y);
         }
     }
+    */
 
     // Draw input
-    let input_n = life.macrocell(input_cell).n;
-    let input_rect = square_rect(0, 1 << input_n);
+    let result_n = life.macrocell(result_cell).n;
+    let result_rect = square_rect(0, 1 << result_n);
 
     raster_to_mesh(
         &mut tri_builder,
         &life,
-        input_cell,
-        input_rect,
+        result_cell,
+        result_rect,
         [1.; 3],
-        time_to_graphics(1),
+        0.,
     );
 
-    let half_width = 1 << input_n - 1;
+    let half_width = 1 << result_n - 1;
 
     let offset = half_width as f32;
     let scale = scale_transform(0.1, 3., -offset, 0., -offset);
