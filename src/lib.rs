@@ -1,6 +1,6 @@
 pub mod io;
 use std::collections::HashMap;
-use ahash::RandomState;
+pub type ZwoHasher = std::hash::BuildHasherDefault<zwohash::ZwoHasher>;
 use std::str::FromStr;
 
 // TODO: This assumes you are only using one HashLife instance!!!
@@ -12,7 +12,7 @@ pub type SubCells = [Handle; 4];
 pub type Coord = (i64, i64);
 pub type Rect = (Coord, Coord);
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct MacroCell {
     /// The width of this cell is 2^n
     pub n: usize,
@@ -21,12 +21,12 @@ pub struct MacroCell {
     /// This macrocell was created from the given coordinate and steps
     pub creation_coord: Option<(Coord, usize)>,
     /// Mapping from time step to result (if any)
-    pub result: HashMap<usize, Handle, RandomState>,
+    pub result: HashMap<usize, Handle, ZwoHasher>,
 }
 
 pub struct HashLife {
     /// Mapping from (sub-cells and time step) to parent cell
-    parent_cell: HashMap<SubCells, Handle, RandomState>,
+    parent_cell: HashMap<SubCells, Handle, ZwoHasher>,
     /// Array of macrocells
     macrocells: Vec<MacroCell>,
     rules: Rules,
