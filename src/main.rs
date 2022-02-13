@@ -34,12 +34,12 @@ struct Opt {
     rects: bool,
 
     /// Rule to execute
-    #[structopt(short, long, default_value="B3/S23")]
+    #[structopt(short, long, default_value = "B3/S23")]
     rule: Rules,
 
     /// Maximum number of macrocells to visualize
-    #[structopt(short, long, default_value="99999")]
-    max_vis_cells: usize
+    #[structopt(short, long, default_value = "99999")]
+    max_vis_cells: usize,
 }
 
 fn prepare_data(args: &Opt) -> Result<(HashLife, Handle, Handle, Rect)> {
@@ -80,9 +80,13 @@ fn prepare_data(args: &Opt) -> Result<(HashLife, Handle, Handle, Rect)> {
         (half_width - rle_height as i64) / 2 + quarter_width,
     );
 
+    let start = std::time::Instant::now();
     let input_cell = life.insert_array(&rle, rle_width, insert_tl, n as _);
+    println!("Input insertion took {}ms", start.elapsed().as_secs_f32() * 1e3);
 
+    let start = std::time::Instant::now();
     let result_cell = life.result(input_cell, args.steps, (-quarter_width, -quarter_width), 0);
+    println!("Result calculation took {}ms", start.elapsed().as_secs_f32() * 1e3);
 
     /*
     let insert_rect = (
@@ -119,33 +123,32 @@ fn highest_pow_2(mut v: u64) -> u32 {
 }
 
 /// Push a mesh to the graphicsbuilder containing the true cells in the given array with size 2^n
-fn raster_to_mesh(b: &mut GraphicsBuilder, data: &[bool], rect: Rect, color: [f32; 3], y: f32) {
-    let ((x1, y1), (x2, y2)) = rect;
-    let width = x2 - x1;
-    let height = y2 - y1;
+fn raster_to_mesh(
+    b: &mut GraphicsBuilder,
+    life: &HashLife,
+    handle: Handle,
+    rect: Rect,
+    color: [f32; 3],
+    y: f32,
+) {
+    let ((x1, y1), _) = rect;
 
-    // TODO: Run-length compression for faces
-    //dbg!(data.len(), width, height, width * height);
-    assert_eq!(data.len(), (width * height) as usize);
-    for (row_idx, row) in data.chunks_exact(width as usize).enumerate() {
-        for (col_idx, &elem) in row.iter().enumerate() {
-            if elem {
-                let (x, z) = (col_idx as i64 + x1, row_idx as i64 + y1);
+    let mut add_pixel = |(x, z): Coord| {
+        let (x, z) = (x as i64 + x1, z as i64 + y1);
 
-                let mut push =
-                    |x, z| b.push_vertex(Vertex::new(world_to_graphics((x, z), y), color));
+        let mut push = |x, z| b.push_vertex(Vertex::new(world_to_graphics((x, z), y), color));
 
-                let [tl, tr, bl, br] = [
-                    push(x, z),
-                    push(x + 1, z),
-                    push(x, z + 1),
-                    push(x + 1, z + 1),
-                ];
+        let [tl, tr, bl, br] = [
+            push(x, z),
+            push(x + 1, z),
+            push(x, z + 1),
+            push(x + 1, z + 1),
+        ];
 
-                b.push_double_sided(&[tl, tr, bl, tr, br, bl]);
-            }
-        }
-    }
+        b.push_double_sided(&[tl, tr, bl, tr, br, bl]);
+    };
+
+    life.resolve((0, 0), &mut add_pixel, rect, handle);
 }
 
 #[derive(Default, Clone, Debug)]
@@ -311,13 +314,25 @@ struct HashlifeVisualizer {
     scale: [[f32; 4]; 4],
 }
 
+fn calc_frame(args: &Opt) -> Result<(GraphicsBuilder, GraphicsBuilder, [[f32; 4]; 4])> {
+    let (life, input_cell, result_cell, view_rect) = prepare_data(&args)?;
+
+    let start = std::time::Instant::now();
+    let (line_builder, tri_builder, scale) = draw_cells(&life, input_cell, result_cell, view_rect, &args);
+    println!("Mesh build took {}ms", start.elapsed().as_secs_f32() * 1e3);
+
+    dbg!(line_builder.vertices.len());
+    dbg!(line_builder.indices.len());
+    dbg!(tri_builder.vertices.len());
+    dbg!(tri_builder.indices.len());
+
+    Ok((line_builder, tri_builder, scale))
+}
+
 impl App<Opt> for HashlifeVisualizer {
     fn init(ctx: &mut Context, platform: &mut Platform, args: Opt) -> Result<Self> {
         // Calculate
-        let (life, input_cell, result_cell, view_rect) = prepare_data(&args)?;
-
-        let (line_builder, tri_builder, scale) =
-            draw_cells(&life, input_cell, result_cell, view_rect, &args);
+        let (line_builder, tri_builder, scale) = calc_frame(&args)?;
 
         let mut lines = ExpandableMesh::new(ctx)?;
         let mut tris = ExpandableMesh::new(ctx)?;
@@ -354,15 +369,7 @@ impl App<Opt> for HashlifeVisualizer {
 
         if self.frame % 10 == 0 && self.args.stride != 0 {
             // Calculate
-            let (life, input_cell, result_cell, view_rect) = prepare_data(&self.args)?;
-
-            let (line_builder, tri_builder, scale) =
-                draw_cells(&life, input_cell, result_cell, view_rect, &self.args);
-
-            dbg!(line_builder.vertices.len());
-            dbg!(line_builder.indices.len());
-            dbg!(tri_builder.vertices.len());
-            dbg!(tri_builder.indices.len());
+            let (line_builder, tri_builder, scale) = calc_frame(&self.args)?;
 
             self.lines
                 .update_from_graphics_builder(ctx, &line_builder)?;
@@ -497,19 +504,18 @@ fn draw_cells(
                 draw_rect(&mut line_builder, rect, color, y);
             }
 
-            let raster = life.raster(handle, square_rect(0, width));
-            raster_to_mesh(&mut tri_builder, &raster, rect, color, y);
+            raster_to_mesh(&mut tri_builder, &life, handle, rect, color, y);
         }
     }
 
     // Draw input
     let input_n = life.macrocell(input_cell).n;
     let input_rect = square_rect(0, 1 << input_n);
-    let input_raster = life.raster(input_cell, input_rect);
 
     raster_to_mesh(
         &mut tri_builder,
-        &input_raster,
+        &life,
+        input_cell,
         input_rect,
         [1.; 3],
         time_to_graphics(1),
@@ -519,20 +525,6 @@ fn draw_cells(
 
     let offset = half_width as f32;
     let scale = scale_transform(0.1, 3., -offset, 0., -offset);
-
-    // Draw result
-    //let result_raster = life.raster(result_cell, view_rect);
-    /*
-    let result_raster = life.raster(result_cell, view_rect);
-
-    raster_to_mesh(
-    &mut tri_builder,
-    &result_raster,
-    view_rect,
-    [1.; 3],
-    time_to_graphics(args.steps),
-    );
-    */
 
     (line_builder, tri_builder, scale)
 }

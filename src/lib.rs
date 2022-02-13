@@ -1,6 +1,6 @@
 pub mod io;
-use std::str::FromStr;
 use std::collections::HashMap;
+use std::str::FromStr;
 
 // TODO: This assumes you are only using one HashLife instance!!!
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
@@ -286,14 +286,27 @@ impl HashLife {
     /// Create a raster image from the given node
     pub fn raster(&self, root: Handle, rect: Rect) -> Vec<bool> {
         let (width, height) = rect_dimensions(rect);
-        let mut data = vec![false; (width * height) as usize];
-        self.raster_rec((0, 0), &mut data, rect, root);
+        let mut image = vec![false; (width * height) as usize];
 
-        data
+        let mut set_pixel = |pos: Coord| {
+            if let Some(idx) = sample_rect(pos, rect) {
+                image[idx] = true;
+            }
+        };
+
+        self.resolve((0, 0), &mut set_pixel, rect, root);
+
+        image
     }
 
-    /// Recursively create a raster image
-    fn raster_rec(&self, corner: Coord, image: &mut [bool], rect: Rect, handle: Handle) {
+    /// Resolve the given handle into an image by calling the given function with pixel coordinates
+    pub fn resolve(
+        &self,
+        corner: Coord,
+        image: &mut impl FnMut(Coord),
+        rect: Rect,
+        handle: Handle,
+    ) {
         // Check if the output is gauranteed to be zero (assumes input is zeroed!)
         if handle == Handle(0) {
             return;
@@ -304,17 +317,14 @@ impl HashLife {
 
         if cell.n == 1 {
             for (pos, Handle(val)) in subcoords(corner, 0).into_iter().zip(cell.children) {
-                if let Some(idx) = sample_rect(pos, rect) {
-                    image[idx] = match val {
-                        0 => false,
-                        1 => true,
-                        other => panic!("N = 1 but {} is not a bit!", other),
-                    };
+                debug_assert!(val == 0 || val == 1);
+                if val != 0 {
+                    image(pos);
                 }
             }
         } else {
             for (sub_corner, node) in subcoords(corner, cell.n - 1).into_iter().zip(cell.children) {
-                self.raster_rec(sub_corner, image, rect, node);
+                self.resolve(sub_corner, image, rect, node);
             }
         }
     }
