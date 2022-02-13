@@ -1,5 +1,6 @@
 pub mod io;
 use std::collections::HashMap;
+use ahash::RandomState;
 use std::str::FromStr;
 
 // TODO: This assumes you are only using one HashLife instance!!!
@@ -20,12 +21,12 @@ pub struct MacroCell {
     /// This macrocell was created from the given coordinate and steps
     pub creation_coord: Option<(Coord, usize)>,
     /// Mapping from time step to result (if any)
-    pub result: HashMap<usize, Handle>,
+    pub result: HashMap<usize, Handle, RandomState>,
 }
 
 pub struct HashLife {
     /// Mapping from (sub-cells and time step) to parent cell
-    parent_cell: HashMap<SubCells, Handle>,
+    parent_cell: HashMap<SubCells, Handle, RandomState>,
     /// Array of macrocells
     macrocells: Vec<MacroCell>,
     rules: Rules,
@@ -458,10 +459,10 @@ impl FromStr for Rules {
             Ok(rules)
         };
 
-        Ok(dbg!(Self {
+        Ok(Self {
             survive: to_rule_array(survive)?,
             born: to_rule_array(born)?,
-        }))
+        })
     }
 }
 

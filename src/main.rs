@@ -337,8 +337,10 @@ impl App<Opt> for HashlifeVisualizer {
         let mut lines = ExpandableMesh::new(ctx)?;
         let mut tris = ExpandableMesh::new(ctx)?;
 
+        let start = std::time::Instant::now();
         lines.update_from_graphics_builder(ctx, &line_builder)?;
         tris.update_from_graphics_builder(ctx, &tri_builder)?;
+        println!("Copy took {}ms", start.elapsed().as_secs_f32() * 1e3);
 
         Ok(Self {
             scale,
@@ -371,9 +373,12 @@ impl App<Opt> for HashlifeVisualizer {
             // Calculate
             let (line_builder, tri_builder, scale) = calc_frame(&self.args)?;
 
+            let start = std::time::Instant::now();
             self.lines
                 .update_from_graphics_builder(ctx, &line_builder)?;
             self.tris.update_from_graphics_builder(ctx, &tri_builder)?;
+            println!("Copy took {}ms", start.elapsed().as_secs_f32() * 1e3);
+
             self.scale = scale;
 
             self.args.steps += self.args.stride;
