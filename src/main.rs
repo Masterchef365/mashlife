@@ -291,6 +291,9 @@ impl ExpandableMesh {
 }
 
 struct HashlifeVisualizer {
+    line_builder: GraphicsBuilder,
+    tri_builder: GraphicsBuilder,
+
     lines: ExpandableMesh,
     tris: ExpandableMesh,
 
@@ -316,13 +319,15 @@ fn calc_frame(
     life: &mut HashLife,
     input_cell: Handle,
     n: u32,
-) -> Result<(GraphicsBuilder, GraphicsBuilder, [[f32; 4]; 4])> {
+    line_builder: &mut GraphicsBuilder,
+    tri_builder: &mut GraphicsBuilder,
+) -> Result<[[f32; 4]; 4]> {
     println!();
     let (result_cell, view_rect) = prepare_data(&args, life, input_cell, n)?;
 
     let start = std::time::Instant::now();
-    let (line_builder, tri_builder, scale) =
-        draw_cells(&life, input_cell, result_cell, view_rect, &args);
+    let scale =
+        draw_cells(&life, input_cell, result_cell, view_rect, &args, line_builder, tri_builder);
     println!("Mesh build took {}ms", start.elapsed().as_secs_f32() * 1e3);
 
     //dbg!(line_builder.vertices.len());
@@ -335,7 +340,7 @@ fn calc_frame(
         tri_builder.indices.len()
     );
 
-    Ok((line_builder, tri_builder, scale))
+    Ok(scale)
 }
 
 impl App<Opt> for HashlifeVisualizer {
@@ -367,7 +372,9 @@ impl App<Opt> for HashlifeVisualizer {
             start.elapsed().as_secs_f32() * 1e3
         );
 
-        let (line_builder, tri_builder, scale) = calc_frame(&args, &mut life, input_cell, n)?;
+        let mut line_builder = GraphicsBuilder::new();
+        let mut tri_builder = GraphicsBuilder::new();
+        let scale = calc_frame(&args, &mut life, input_cell, n, &mut line_builder, &mut tri_builder)?;
 
         let mut lines = ExpandableMesh::new(ctx)?;
         let mut tris = ExpandableMesh::new(ctx)?;
@@ -378,6 +385,8 @@ impl App<Opt> for HashlifeVisualizer {
         println!("Copy took {}ms", start.elapsed().as_secs_f32() * 1e3);
 
         Ok(Self {
+            line_builder,
+            tri_builder,
             n,
             input_cell,
             life,
@@ -410,13 +419,15 @@ impl App<Opt> for HashlifeVisualizer {
         //if self.frame % 10 == 0 && self.args.stride != 0 {
         if self.args.stride != 0 {
             // Calculate
-            let (line_builder, tri_builder, scale) =
-                calc_frame(&self.args, &mut self.life, self.input_cell, self.n)?;
+            self.tri_builder.clear();
+            self.line_builder.clear();
+            let scale =
+                calc_frame(&self.args, &mut self.life, self.input_cell, self.n, &mut self.line_builder, &mut self.tri_builder)?;
 
             let start = std::time::Instant::now();
             self.lines
-                .update_from_graphics_builder(ctx, &line_builder)?;
-            self.tris.update_from_graphics_builder(ctx, &tri_builder)?;
+                .update_from_graphics_builder(ctx, &self.line_builder)?;
+            self.tris.update_from_graphics_builder(ctx, &self.tri_builder)?;
             println!("Copy took {}ms", start.elapsed().as_secs_f32() * 1e3);
 
             self.scale = scale;
@@ -493,12 +504,12 @@ fn draw_cells(
     result_cell: Handle,
     _view_rect: Rect,
     args: &Opt,
-) -> (GraphicsBuilder, GraphicsBuilder, [[f32; 4]; 4]) {
-    let mut line_builder = GraphicsBuilder::new();
-    let mut tri_builder = GraphicsBuilder::new();
+    line_builder: &mut GraphicsBuilder,
+    tri_builder: &mut GraphicsBuilder,
+) -> [[f32; 4]; 4] {
 
     draw_rect(
-        &mut line_builder,
+        line_builder,
         square_rect(0, life.macrocell(result_cell).n as _),
         [1.; 3],
         0.,
@@ -560,7 +571,7 @@ fn draw_cells(
     let result_rect = square_rect(0, 1 << result_n);
 
     raster_to_mesh(
-        &mut tri_builder,
+        tri_builder,
         &life,
         result_cell,
         result_rect,
@@ -573,5 +584,5 @@ fn draw_cells(
     let offset = half_width as f32;
     let scale = scale_transform(0.1, 3., -offset, 0., -offset);
 
-    (line_builder, tri_builder, scale)
+    scale
 }
