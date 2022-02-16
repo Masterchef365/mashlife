@@ -3,7 +3,6 @@ use idek::prelude::*;
 use idek::{prelude::*, IndexBuffer, MultiPlatformCamera};
 use mashlife::io::cells_to_pixels;
 use mashlife::{Coord, Handle, HashLife, Rect, Rules};
-use rand::prelude::*;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -29,17 +28,9 @@ struct Opt {
     #[structopt(long)]
     vr: bool,
 
-    /// Show quadtree rectangles
-    #[structopt(long)]
-    rects: bool,
-
     /// Rule to execute
     #[structopt(short, long, default_value = "B3/S23")]
     rule: Rules,
-
-    /// Maximum number of macrocells to visualize
-    #[structopt(short, long, default_value = "99999")]
-    max_vis_cells: usize,
 }
 
 fn prepare_data(
