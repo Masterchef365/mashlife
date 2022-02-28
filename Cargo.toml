@@ -2,16 +2,14 @@
 name = "mashlife"
 version = "0.1.0"
 edition = "2021"
-default-run = "mashlife"
+#default-run = "mashlife"
 
 [dependencies]
 anyhow = "1"
 structopt = { version = "0.3", default-features = false }
-png = "0.17.2"
-idek = { git = "https://github.com/Masterchef365/idek.git", rev = "6a5678f" }
-rand = { version = "0.8", features = ["small_rng"] }
 zwohash = { version = "0.1.2", default-features = false }
+png = "0.17.2"
 
-[profile.release]
-debug = true
+#[profile.release]
+#debug = true
 #lto = true

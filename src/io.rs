@@ -4,9 +4,13 @@ use std::io::BufWriter;
 use std::iter::repeat;
 use std::path::Path;
 
-/// Import an RLE file
+/// Load an RLE file
 pub fn load_rle(path: impl AsRef<Path>) -> Result<(Vec<bool>, usize)> {
-    let text = std::fs::read_to_string(path)?;
+    parse_rle(&std::fs::read_to_string(path)?)
+}
+
+/// Parse RLE text
+pub fn parse_rle(text: &str) -> Result<(Vec<bool>, usize)> {
     let mut lines = text.lines();
 
     // Find header
