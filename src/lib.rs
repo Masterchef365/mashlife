@@ -29,6 +29,7 @@ pub struct HashLife {
     parent_cell: HashMap<SubCells, Handle, ZwoHasher>,
     /// Array of macrocells
     macrocells: Vec<MacroCell>,
+    /// Ruleset
     rules: Rules,
 }
 
@@ -104,11 +105,6 @@ impl HashLife {
 
         // Return the input pixel at the given coordinates
         if n == 0 {
-            /*let idx = sample_rect(tl_corner, input_rect);
-            if idx > Some(input.len()) {
-                let (w, h) = crate::rect_dimensions(input_rect);
-                dbg!(tl_corner, input_rect, idx, w, h);
-            }*/
             return Handle(
                 sample_rect(tl_corner, input_rect)
                     .map(|idx| input[idx])
@@ -124,6 +120,8 @@ impl HashLife {
         self.insert_cell(children, n, None)
     }
 
+    /// Return the handle of the given cell, optionally setting it's creation coordinate (for
+    /// visualization)
     fn insert_cell(
         &mut self,
         children: SubCells,
