@@ -24,6 +24,8 @@ pub struct MacroCell {
     pub result: HashMap<usize, Handle, ZwoHasher>,
 }
 
+/// An implementation of HashLife;
+/// Cellular-automata acceleration structure
 pub struct HashLife {
     /// Mapping from (sub-cells and time step) to parent cell
     parent_cell: HashMap<SubCells, Handle, ZwoHasher>,
