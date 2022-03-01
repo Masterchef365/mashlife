@@ -1,6 +1,6 @@
 pub mod io;
 use std::collections::HashMap;
-pub type ZwoHasher = std::hash::BuildHasherDefault<zwohash::ZwoHasher>;
+type ZwoHasher = std::hash::BuildHasherDefault<zwohash::ZwoHasher>;
 use std::str::FromStr;
 
 // TODO: This assumes you are only using one HashLife instance!!!
@@ -316,6 +316,12 @@ impl HashLife {
         let cell = self.macrocell(handle);
         debug_assert_ne!(cell.n, 0);
 
+        // Check if we're out of bounds
+        let width = 1 << cell.n;
+        if !rect_intersect((corner, (corner.0 + width, corner.1 + width)), rect) {
+            return;
+        }
+
         if cell.n == 1 {
             for (pos, Handle(val)) in subcoords(corner, 0).into_iter().zip(cell.children) {
                 debug_assert!(val == 0 || val == 1);
@@ -324,6 +330,7 @@ impl HashLife {
                 }
             }
         } else {
+
             for (sub_corner, node) in subcoords(corner, cell.n - 1).into_iter().zip(cell.children) {
                 self.resolve(sub_corner, image, rect, node);
             }
