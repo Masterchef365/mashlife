@@ -323,15 +323,10 @@ impl HashLife {
             return;
         }
 
-        if cell.n == 1 {
-            for (pos, Handle(val)) in subcoords(corner, 0).into_iter().zip(cell.children) {
-                debug_assert!(val == 0 || val == 1);
-                if val != 0 {
-                    image(pos);
-                }
-            }
+        // If at the base layer, output to the image. Otherwise compute sub-cells
+        if cell.n == 0 {
+            image(corner);
         } else {
-
             for (sub_corner, node) in subcoords(corner, cell.n - 1).into_iter().zip(cell.children) {
                 self.resolve(sub_corner, image, rect, node);
             }
