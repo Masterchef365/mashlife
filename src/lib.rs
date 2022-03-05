@@ -316,9 +316,10 @@ impl HashLife {
         let cell = self.macrocell(handle);
         debug_assert_ne!(cell.n, 0);
 
-        // Check if we're out of bounds
+        // Check if this macrocell is in view
         let width = 1 << cell.n;
-        if !rect_intersect((corner, (corner.0 + width, corner.1 + width)), rect) {
+        let cell_rect = (corner, (corner.0 + width, corner.1 + width));
+        if !rect_intersect(cell_rect, rect) {
             return;
         }
 
