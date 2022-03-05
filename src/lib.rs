@@ -18,8 +18,6 @@ pub struct MacroCell {
     pub n: usize,
     /// Indices of child cells (each with width 2^(n-1))
     pub children: SubCells,
-    /// The number of live cells in this macrocell
-    pub alive: u32,
     /// Mapping from time step to result (if any)
     pub result: HashMap<usize, Handle, ZwoHasher>,
 }
@@ -44,13 +42,11 @@ impl HashLife {
             macrocells: vec![
                 MacroCell {
                     n: 0,
-                    alive: 0,
                     children: [Handle(0); 4],
                     result: Default::default(),
                 },
                 MacroCell {
                     n: 0,
-                    alive: 1,
                     children: [Handle(usize::MAX); 4],
                     result: Default::default(),
                 },
@@ -132,11 +128,9 @@ impl HashLife {
         match self.parent_cell.get(&children) {
             None => {
                 let idx = self.macrocells.len();
-                let alive = children.iter().map(|&c| self.macrocell(c).alive).sum::<u32>();
                 self.macrocells.push(MacroCell {
                     n,
                     children,
-                    alive,
                     result: Default::default(),
                 });
                 let handle = Handle(idx);
@@ -284,27 +278,27 @@ impl HashLife {
     }
 
     /// Create a raster image from the given node
-    pub fn raster(&self, root: Handle, rect: Rect) -> Vec<bool> {
+    pub fn raster(&self, root: Handle, rect: Rect, min_n: usize) -> Vec<bool> {
         let (width, height) = rect_dimensions(rect);
         let mut image = vec![false; (width * height) as usize];
 
-        let mut set_pixel = |pos: Coord, _| {
+        let mut set_pixel = |pos: Coord| {
             if let Some(idx) = sample_rect(pos, rect) {
                 image[idx] = true;
             }
         };
 
-        self.resolve((0, 0), &mut set_pixel, 0, rect, root);
+        self.resolve((0, 0), &mut set_pixel, min_n, rect, root);
 
         image
     }
 
     /// Resolve the given handle into an image by calling the given function with pixel
-    /// coordinates, and the number of live cells in the given cell.
+    /// coordinates. min_n specifies the minimum macrocell depth the function will traverse
     pub fn resolve(
         &self,
         corner: Coord,
-        image: &mut impl FnMut(Coord, u32),
+        image: &mut impl FnMut(Coord),
         min_n: usize,
         rect: Rect,
         handle: Handle,
@@ -326,7 +320,7 @@ impl HashLife {
 
         // If at the base layer, output to the image. Otherwise compute sub-cells
         if cell.n == min_n {
-            image(corner, cell.alive);
+            image(corner);
         } else {
             for (sub_corner, node) in subcoords(corner, cell.n - 1).into_iter().zip(cell.children) {
                 self.resolve(sub_corner, image, min_n, rect, node);
