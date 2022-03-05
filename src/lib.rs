@@ -327,6 +327,50 @@ impl HashLife {
             }
         }
     }
+
+    /// Returns a new handle with the cell at `coord` set to `value` in `handle`.
+    /// If the given cell is empty, return a new cell with the given size `n` at the
+    /// corresponding bit set.
+    pub fn modify(
+        &mut self,
+        handle: Handle,
+        (x, y): Coord,
+        modif: Modification,
+        n: usize,
+    ) -> Handle {
+        let cell = self.macrocell(handle);
+        let mut children = cell.children;
+        
+        if n == 0 {
+            return match (handle, modif) {
+                (Handle(0), Modification::Toggle) => Handle(1),
+                (Handle(1), Modification::Toggle) => Handle(0),
+                (_, Modification::Alive) => Handle(1),
+                (_, Modification::Dead) => Handle(0),
+                _ => unreachable!(),
+            };
+        }
+
+        let half_width = 1 << n - 1;
+
+        let (idx, subcoord) = match (x >= half_width, y >= half_width) {
+            (false, false) => (0, (x, y)),
+            (true, false) => (1, (x - half_width, y)),
+            (false, true) => (2, (x, y - half_width)),
+            (true, true) => (3, (x - half_width, y - half_width)),
+        };
+
+        children[idx] = self.modify(children[idx], subcoord, modif, n - 1);
+
+        self.insert_cell(children, n)
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum Modification {
+    Alive,
+    Dead,
+    Toggle,
 }
 
 /// Calculates whether or not this square at `coord` of size `2^n` at time `2^(n - 1)` can be anything other than zero, given the input rect
