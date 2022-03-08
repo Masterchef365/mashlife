@@ -249,8 +249,8 @@ impl HashLife {
     }
 
     /// Return the macrocell behind the given handle
-    pub fn macrocell(&self, Handle(idx): Handle) -> &MacroCell {
-        &self.macrocells[idx]
+    pub fn macrocell(&self, Handle(idx): Handle) -> MacroCell {
+        self.macrocells[idx]
     }
 
     /// Get the center 4 cells of the given cell
@@ -376,6 +376,37 @@ impl HashLife {
                 self.read(cell.children[idx], subcoord)
             }
         }
+    }
+
+    /// Return a new handle padded by zeroes on all sides. Useful for padding result calculations
+    /// so that the parent cell size does not shrink with each step (for example, if modified)
+    pub fn expand(&mut self, handle: Handle) -> Handle {
+        let cell = self.macrocell(handle);
+        let [tl, tr, bl, br] = cell.children;
+
+        let z = Handle(0);
+
+        let tl = self.insert_cell([
+            z, z, // 
+            z, tl, // 
+        ], cell.n);
+
+        let tr = self.insert_cell([
+            z, z, // 
+            tr, z, // 
+        ], cell.n);
+
+        let bl = self.insert_cell([
+            z, bl, // 
+            z, z, // 
+        ], cell.n);
+
+        let br = self.insert_cell([
+            br, z, // 
+            z, z, // 
+        ], cell.n);
+
+        self.insert_cell([tl, tr, bl, br], cell.n + 1)
     }
 }
 
