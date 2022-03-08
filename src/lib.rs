@@ -328,43 +328,55 @@ impl HashLife {
     pub fn modify(
         &mut self,
         handle: Handle,
-        (x, y): Coord,
-        modif: Modification,
+        coord: Coord,
+        value: bool,
         n: usize,
     ) -> Handle {
         let cell = self.macrocell(handle);
         let mut children = cell.children;
+
+        // The zero is a special case, as it has no n and we can only insert. Otherwise sanity check.
+        if handle != Handle(0) {
+            assert_eq!(n, cell.n);
+        }
         
         if n == 0 {
-            return match (handle, modif) {
-                (Handle(0), Modification::Toggle) => Handle(1),
-                (Handle(1), Modification::Toggle) => Handle(0),
-                (_, Modification::Alive) => Handle(1),
-                (_, Modification::Dead) => Handle(0),
-                _ => unreachable!(),
+            return match value {
+                false => Handle(0),
+                true => Handle(1),
             };
         }
 
-        let half_width = 1 << n - 1;
+        let (idx, subcoord) = Self::child_subcoord_idx(coord, n);
 
-        let (idx, subcoord) = match (x >= half_width, y >= half_width) {
+        children[idx] = self.modify(children[idx], subcoord, value, n - 1);
+
+        self.insert_cell(children, n)
+    }
+
+    /// Return the child index and sub-coordinate at the given coordinates
+    fn child_subcoord_idx((x, y): Coord, n: usize) -> (usize, Coord) {
+        let half_width = 1 << n - 1;
+        match (x >= half_width, y >= half_width) {
             (false, false) => (0, (x, y)),
             (true, false) => (1, (x - half_width, y)),
             (false, true) => (2, (x, y - half_width)),
             (true, true) => (3, (x - half_width, y - half_width)),
-        };
-
-        children[idx] = self.modify(children[idx], subcoord, modif, n - 1);
-
-        self.insert_cell(children, n)
+        }
     }
-}
 
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub enum Modification {
-    Alive,
-    Dead,
-    Toggle,
+    /// Read a single cell at the given coordinates
+    pub fn read(&self, handle: Handle, coord: Coord) -> bool {
+        match handle {
+            Handle(0) => return false,
+            Handle(1) => return true,
+            other => {
+                let cell = self.macrocell(other);
+                let (idx, subcoord) = Self::child_subcoord_idx(coord, cell.n);
+                self.read(cell.children[idx], subcoord)
+            }
+        }
+    }
 }
 
 /// Calculates whether or not this square at `coord` of size `2^n` at time `2^(n - 1)` can be anything other than zero, given the input rect
