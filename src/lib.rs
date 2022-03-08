@@ -12,16 +12,15 @@ pub type SubCells = [Handle; 4];
 pub type Coord = (i64, i64);
 pub type Rect = (Coord, Coord);
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct MacroCell {
     /// The width of this cell is 2^n
     pub n: usize,
     /// Indices of child cells (each with width 2^(n-1))
     pub children: SubCells,
-    /// Mapping from time step to result (if any)
-    pub result: HashMap<usize, Handle, ZwoHasher>,
 }
 
+#[derive(Clone)]
 /// An implementation of HashLife;
 /// Cellular-automata acceleration structure
 pub struct HashLife {
@@ -29,6 +28,8 @@ pub struct HashLife {
     parent_cell: HashMap<SubCells, Handle, ZwoHasher>,
     /// Array of macrocells
     macrocells: Vec<MacroCell>,
+    /// Mapping from time step and handle to result handle
+    result: HashMap<(usize, Handle), Handle, ZwoHasher>,
     /// Ruleset
     rules: Rules,
 }
@@ -43,14 +44,13 @@ impl HashLife {
                 MacroCell {
                     n: 0,
                     children: [Handle(0); 4],
-                    result: Default::default(),
                 },
                 MacroCell {
                     n: 0,
                     children: [Handle(usize::MAX); 4],
-                    result: Default::default(),
                 },
             ],
+            result: Default::default(),
         }
     }
 
@@ -131,7 +131,6 @@ impl HashLife {
                 self.macrocells.push(MacroCell {
                     n,
                     children,
-                    result: Default::default(),
                 });
                 let handle = Handle(idx);
                 self.parent_cell.insert(children, handle);
@@ -160,7 +159,7 @@ impl HashLife {
         assert!(dt <= 1 << cell.n - 2, "dt ({}) must be <= 2^(n - 2), n={}", dt, cell.n);
 
         // Check if we already know the result
-        if let Some(&result) = cell.result.get(&dt) {
+        if let Some(&result) = self.result.get(&(dt, handle)) {
             return result;
         }
 
@@ -245,18 +244,13 @@ impl HashLife {
             self.insert_cell(result, cell_n - 1)
         };
 
-        self.macrocell_mut(handle).result.insert(dt, result);
+        self.result.insert((dt, handle), result);
         result
     }
 
     /// Return the macrocell behind the given handle
     pub fn macrocell(&self, Handle(idx): Handle) -> &MacroCell {
         &self.macrocells[idx]
-    }
-
-    /// Return the mutable macrocell behind the given handle
-    fn macrocell_mut(&mut self, Handle(idx): Handle) -> &mut MacroCell {
-        &mut self.macrocells[idx]
     }
 
     /// Get the center 4 cells of the given cell
