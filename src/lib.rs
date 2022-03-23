@@ -70,16 +70,6 @@ impl HashLife {
         }
     }
 
-    /*
-    /// Returns all macrocells in this instance
-    pub fn macrocells(&self) -> impl Iterator<Item = (Handle, &MacroCell)> {
-        self.macrocells
-            .iter()
-            .enumerate()
-            .map(|(idx, cell)| (Handle(idx), cell))
-    }
-    */
-
     /// Insert the given data with the given width and top-left
     /// corner and return a macrocell of width 2^n, padded with
     /// zeroes everywhere else. Top-left is relative to the top-left of the cell.
@@ -141,7 +131,7 @@ impl HashLife {
         self.parent(children, n)
     }
 
-    /// Return the parent handle of the given cells
+    /// Return the parent handle of the given cells, or create a new parent with the given size n
     fn parent(
         &mut self,
         children: SubCells,
@@ -162,7 +152,7 @@ impl HashLife {
         }
     }
 
-    /// Returns the given macro`cell` advanced by the given number of steps `dt` (up to and including
+    /// Returns the given MacroCell advanced by the given number of steps `dt` (up to and including
     /// 2^(n-2) where 2^n is the width of the cell)
     pub fn result(&mut self, handle: Handle, dt: usize, corner: Coord) -> Handle {
         // Fast-path for all-dead cells
@@ -271,7 +261,7 @@ impl HashLife {
     }
 
     /// Return the macrocell behind the given handle
-    pub fn macrocell(&self, Handle(idx): Handle) -> MacroCell {
+    fn macrocell(&self, Handle(idx): Handle) -> MacroCell {
         self.macrocells[idx]
     }
 
@@ -310,7 +300,7 @@ impl HashLife {
     }
 
     /// Resolve the given handle into an image by calling the given function with pixel
-    /// coordinates. min_n specifies the minimum macrocell depth the function will traverse
+    /// coordinates. min_n specifies the minimum macrocell size/depth the function will traverse
     pub fn resolve(
         &self,
         corner: Coord,
@@ -346,7 +336,7 @@ impl HashLife {
 
     /// Returns a new handle with the cell at `coord` set to `value` in `handle`.
     /// If the given cell is empty, return a new cell with the given size `n` at the
-    /// corresponding bit set.
+    /// corresponding `value` set at `coord`
     pub fn modify(
         &mut self,
         handle: Handle,
