@@ -1,6 +1,4 @@
 use anyhow::{bail, format_err, Result};
-use std::fs::File;
-use std::io::BufWriter;
 use std::iter::repeat;
 use std::path::Path;
 
@@ -87,38 +85,4 @@ pub fn parse_rle(text: &str) -> Result<(Vec<bool>, usize)> {
     data.extend(repeat(false).take((width * height).checked_sub(len).unwrap()));
 
     Ok((data, width))
-}
-
-pub fn write_png(path: impl AsRef<Path>, data: &[u8], width: usize) -> Result<()> {
-    assert!(
-        data.len() % 3 == 0,
-        "Data length must be a multiple of 3 (RGB)"
-    );
-    let n_pixels = data.len() / 3;
-
-    assert!(
-        n_pixels % width == 0,
-        "Pixel count must be a multiple of width"
-    );
-    let height = n_pixels / width;
-
-    let file = File::create(path)?;
-    let file = BufWriter::new(file);
-
-    let mut encoder = png::Encoder::new(file, width as _, height as _); // Width is 2 pixels and height is 1.
-    encoder.set_color(png::ColorType::Rgb);
-    encoder.set_depth(png::BitDepth::Eight);
-    let mut writer = encoder.write_header()?;
-
-    writer.write_image_data(&data)?;
-
-    Ok(())
-}
-
-pub fn cells_to_pixels(cells: &[bool]) -> Vec<u8> {
-    cells
-        .iter()
-        .map(|&b| [b as u8 * 255; 3])
-        .flatten()
-        .collect()
 }

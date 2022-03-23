@@ -1,17 +1,29 @@
 pub mod io;
+pub mod geometry;
+mod rules;
+pub use rules::Rules;
+use geometry::*;
 use std::collections::HashMap;
 type ZwoHasher = std::hash::BuildHasherDefault<zwohash::ZwoHasher>;
-use std::str::FromStr;
 
 // TODO: This assumes you are only using one HashLife instance!!!
+/// Handle representing a macrocell
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Handle(pub(crate) usize);
 
+/// Dead macrocell. Children are dead cells too
+const DEAD: Handle = Handle(0);
+
+/// Living cell
+const ALIVE: Handle = Handle(1);
+
+/// Handle chosen to panic in debug mode
+const INVALID_HANDLE: Handle = Handle(usize::MAX);
+
+/// A list of four sub-macrocells in row-major order
 pub type SubCells = [Handle; 4];
 
-pub type Coord = (i64, i64);
-pub type Rect = (Coord, Coord);
-
+/// A macrocell, which is a list of sub-cells and a size
 #[derive(Debug, Copy, Clone)]
 pub struct MacroCell {
     /// The width of this cell is 2^n
@@ -22,11 +34,11 @@ pub struct MacroCell {
 
 #[derive(Clone)]
 /// An implementation of HashLife;
-/// Cellular-automata acceleration structure
+/// A Cellular-automata acceleration structure
 pub struct HashLife {
-    /// Mapping from (sub-cells and time step) to parent cell
+    /// Mapping from sub-cells to parent cell
     parent_cell: HashMap<SubCells, Handle, ZwoHasher>,
-    /// Array of macrocells
+    /// Array of macrocells (mapping cell idx to 
     macrocells: Vec<MacroCell>,
     /// Mapping from time step and handle to result handle
     result: HashMap<(usize, Handle), Handle, ZwoHasher>,
@@ -35,31 +47,38 @@ pub struct HashLife {
 }
 
 impl HashLife {
+    /// Create a new HashLife instance with the given rules
     pub fn new(rules: Rules) -> Self {
         Self {
             rules,
-            // Zero always yields zero
-            parent_cell: [([Handle(0); 4], Handle(0))].into_iter().collect(),
+            parent_cell: [([DEAD; 4], DEAD)].into_iter().collect(),
             macrocells: vec![
+                // Handle(0) is infinite dead cells.
+                // Zero is special; it has children which are all zeros. This makes construction of
+                // dead cells very easy, but admits some special cases.
                 MacroCell {
                     n: 0,
-                    children: [Handle(0); 4],
+                    children: [DEAD; 4],
                 },
+                // Handle(1) is always a single, live cell.
                 MacroCell {
                     n: 0,
-                    children: [Handle(usize::MAX); 4],
+                    children: [INVALID_HANDLE; 4],
                 },
             ],
             result: Default::default(),
         }
     }
 
+    /*
+    /// Returns all macrocells in this instance
     pub fn macrocells(&self) -> impl Iterator<Item = (Handle, &MacroCell)> {
         self.macrocells
             .iter()
             .enumerate()
             .map(|(idx, cell)| (Handle(idx), cell))
     }
+    */
 
     /// Insert the given data with the given width and top-left
     /// corner and return a macrocell of width 2^n, padded with
@@ -81,7 +100,7 @@ impl HashLife {
         );
         let height = input.len() / width;
 
-        // Calculate input rect
+         // Calculate input rect
         let (left, top) = tl_corner;
         let br_corner = (left + width as i64, top + height as i64);
         let rect = (tl_corner, br_corner);
@@ -89,18 +108,17 @@ impl HashLife {
         self.insert_rect(input, (0, 0), rect, n)
     }
 
-    pub fn insert_rect(
+    /// Insert the given array with dimensions described by input_rect
+    /// Positions within the input rect are calculated relative to tl_corner, representing the
+    /// top-left corner of the handle in the space of the rect
+    /// n is the 
+    fn insert_rect(
         &mut self,
         input: &[bool],
         tl_corner: Coord,
         input_rect: Rect,
         n: usize,
     ) -> Handle {
-        // Short circuit for zeroes
-        if zero_input(tl_corner, n, input_rect) {
-            return Handle(0);
-        }
-
         // Return the input pixel at the given coordinates
         if n == 0 {
             return Handle(
@@ -110,17 +128,21 @@ impl HashLife {
             );
         }
 
+        // Short circuit for zeroes
+        if !rect_intersect(rect_pow_2(tl_corner, n), input_rect) {
+            return DEAD;
+        }
+
         // Calculate which macrocell we are in
         let children = subcoords(tl_corner, n - 1)
             .map(|sub_corner| self.insert_rect(input, sub_corner, input_rect, n - 1));
 
         //self.insert_cell(children, n, Some((tl_corner, 0)))
-        self.insert_cell(children, n)
+        self.parent(children, n)
     }
 
-    /// Return the handle of the given cell, optionally setting it's creation coordinate (for
-    /// visualization)
-    fn insert_cell(
+    /// Return the parent handle of the given cells
+    fn parent(
         &mut self,
         children: SubCells,
         n: usize,
@@ -140,11 +162,11 @@ impl HashLife {
         }
     }
 
-    /// Returns the given macro`cell` advanced by the given number of `steps` (up to and including
-    /// 2^(n-2) where 2^n is the width of the cell
+    /// Returns the given macro`cell` advanced by the given number of steps `dt` (up to and including
+    /// 2^(n-2) where 2^n is the width of the cell)
     pub fn result(&mut self, handle: Handle, dt: usize, corner: Coord) -> Handle {
-        // Fast-path for zeroes
-        if handle.0 == 0 {
+        // Fast-path for all-dead cells
+        if handle == DEAD {
             return handle;
         }
 
@@ -172,7 +194,7 @@ impl HashLife {
                 1 => solve_4x4(self.grandchildren(handle), &self.rules),
                 _ => panic!("Invalid dt for n = 2"),
             };
-            self.insert_cell(result, cell_n - 1)
+            self.parent(result, cell_n - 1)
         } else {
             let sub_step_dt = 1 << cell_n - 3;
 
@@ -213,7 +235,7 @@ impl HashLife {
                 (corner_3x3(1, 2), [j, m, l, o]),
                 (corner_3x3(2, 2), br),
             ]
-            .map(|(coord, subcells)| (coord, self.insert_cell(subcells, cell_n - 1)));
+            .map(|(coord, subcells)| (coord, self.parent(subcells, cell_n - 1)));
 
             /*
             Compute results or passthroughs for grandchild nodes
@@ -234,14 +256,14 @@ impl HashLife {
                 (corner_2x2(0, 1), [t, u, w, x]),
                 (corner_2x2(1, 1), [u, v, x, y]),
             ]
-            .map(|(coord, subcells)| (coord, self.insert_cell(subcells, cell_n - 1)));
+            .map(|(coord, subcells)| (coord, self.parent(subcells, cell_n - 1)));
 
             // Compute results or passthroughs for child nodes
             let result =
                 middle_2x2.map(|(coord, handle)| self.result(handle, dt_2, coord));
 
             // Save the result
-            self.insert_cell(result, cell_n - 1)
+            self.parent(result, cell_n - 1)
         };
 
         self.result.insert((dt, handle), result);
@@ -298,7 +320,7 @@ impl HashLife {
         handle: Handle,
     ) {
         // Check if the output is gauranteed to be zero (assumes input is zeroed!)
-        if handle == Handle(0) {
+        if handle == DEAD {
             return;
         }
 
@@ -335,15 +357,15 @@ impl HashLife {
         let cell = self.macrocell(handle);
         let mut children = cell.children;
 
-        // The zero is a special case, as it has no n and we can only insert. Otherwise sanity check.
-        if handle != Handle(0) {
+        // The dead cell is a special case, as it has no n and we can only insert. Otherwise sanity check.
+        if handle != DEAD {
             assert_eq!(n, cell.n);
         }
         
         if n == 0 {
             return match value {
-                false => Handle(0),
-                true => Handle(1),
+                false => DEAD,
+                true => ALIVE,
             };
         }
 
@@ -351,7 +373,7 @@ impl HashLife {
 
         children[idx] = self.modify(children[idx], subcoord, value, n - 1);
 
-        self.insert_cell(children, n)
+        self.parent(children, n)
     }
 
     /// Return the child index and sub-coordinate at the given coordinates
@@ -368,8 +390,8 @@ impl HashLife {
     /// Read a single cell at the given coordinates
     pub fn read(&self, handle: Handle, coord: Coord) -> bool {
         match handle {
-            Handle(0) => return false,
-            Handle(1) => return true,
+            DEAD => return false,
+            ALIVE => return true,
             other => {
                 let cell = self.macrocell(other);
                 let (idx, subcoord) = Self::child_subcoord_idx(coord, cell.n);
@@ -384,88 +406,33 @@ impl HashLife {
         let cell = self.macrocell(handle);
         let [tl, tr, bl, br] = cell.children;
 
-        let z = Handle(0);
+        let z = DEAD;
 
-        let tl = self.insert_cell([
+        let tl = self.parent([
             z, z, // 
             z, tl, // 
         ], cell.n);
 
-        let tr = self.insert_cell([
+        let tr = self.parent([
             z, z, // 
             tr, z, // 
         ], cell.n);
 
-        let bl = self.insert_cell([
+        let bl = self.parent([
             z, bl, // 
             z, z, // 
         ], cell.n);
 
-        let br = self.insert_cell([
+        let br = self.parent([
             br, z, // 
             z, z, // 
         ], cell.n);
 
-        self.insert_cell([tl, tr, bl, br], cell.n + 1)
+        self.parent([tl, tr, bl, br], cell.n + 1)
     }
 }
 
-/// Calculates whether or not this square at `coord` of size `2^n` at time `2^(n - 1)` can be anything other than zero, given the input rect
-fn zero_input(coord: Coord, n: usize, input_rect: Rect) -> bool {
-    if n == 0 {
-        return false;
-    }
-
-    let time = 1 << n - 1;
-    let input_rect = extend_rect(input_rect, time);
-
-    let width = 1 << n;
-    let (x, y) = coord;
-    !rect_intersect((coord, (x + width, y + width)), input_rect)
-}
-
-/// Check if the given point is inside the given rectangle
-fn inside_rect((x, y): Coord, ((x1, y1), (x2, y2)): Rect) -> bool {
-    debug_assert!(x1 < x2);
-    debug_assert!(y1 < y2);
-    x >= x1 && x < x2 && y >= y1 && y < y2
-}
-
-/// Calculate the row-major offset of the given `pos` inside the given `rect`, or return None if
-/// out of bounds.
-fn sample_rect(pos @ (x, y): Coord, rect @ ((x1, y1), (x2, _)): Rect) -> Option<usize> {
-    inside_rect(pos, rect).then(|| {
-        let (dx, dy) = (x - x1, y - y1);
-        let width = x2 - x1;
-        (dx + dy * width) as usize
-    })
-}
-
-/// Given a corner position at `(x, y)`, and a size `n` return the corner positions of the four
-/// quadrants that make up the macrocell.
-fn subcoords((x, y): Coord, n: usize) -> [Coord; 4] {
-    let side_len = 1 << n;
-    [
-        (x, y),
-        (x + side_len, y),
-        (x, y + side_len),
-        (x + side_len, y + side_len),
-    ]
-}
-
-/// Increase the width of the rect on all sides by `w`
-fn extend_rect(((x1, y1), (x2, y2)): Rect, w: i64) -> Rect {
-    ((x1 - w, y1 - w), (x2 + w, y2 + w))
-}
-
-/// Returns true if the given rectangles intersect
-fn rect_intersect(a: Rect, b: Rect) -> bool {
-    let ((x1a, y1a), (x2a, y2a)) = a;
-    let ((x1b, y1b), (x2b, y2b)) = b;
-    x1a < x2b && x1b < x2a && y1a < y2b && y1b < y2a
-}
-
-/// Solve a 4x4 grid
+/// Solve a 4x4 grid, represented as four corners of row-major 2x2 grids
 fn solve_4x4(
     [[a, b, c, d], [e, f, g, h], [i, j, k, l], [m, n, o, p]]: [SubCells; 4],
     rules: &Rules,
@@ -478,82 +445,40 @@ fn solve_4x4(
     ]
 }
 
-/// Solve a 3x4 grid
+/// Solve a row-major 3x3 grid
 fn solve_3x3([a, b, c, d, e, f, g, h, i]: [Handle; 9], rules: &Rules) -> Handle {
     let count = [a, b, c, d, f, g, h, i]
         .into_iter()
-        .map(|Handle(i)| i)
-        .sum();
-    Handle(rules.execute(e.0 != 0, count) as usize)
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct Rules {
-    survive: [bool; 9],
-    born: [bool; 9],
-}
-
-impl Rules {
-    pub fn execute(&self, center: bool, neighbors: usize) -> bool {
-        if center {
-            self.survive[neighbors]
-        } else {
-            self.born[neighbors]
-        }
-    }
-}
-
-impl Default for Rules {
-    fn default() -> Self {
-        Self::from_str("B3/S23").unwrap()
-    }
-}
-
-impl FromStr for Rules {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut parts = s.split('/');
-        let born = parts
-            .next()
-            .ok_or_else(|| "No slash in rulestring".to_string())?
-            .trim_start_matches('B');
-        let survive = parts
-            .next()
-            .ok_or_else(|| "Empty rule".to_string())?
-            .trim_start_matches('S');
-
-        let to_rule_array = |s: &str| -> Result<[bool; 9], String> {
-            let mut rules = [false; 9];
-            for c in s.chars() {
-                if c.is_digit(10) {
-                    let dig = c as u8 - b'0';
-                    let dig = dig as usize;
-                    if dig < rules.len() {
-                        rules[dig] = true;
-                    } else {
-                        return Err(format!("{dig} is not valid in a rule string"));
-                    }
-                }
-            }
-            Ok(rules)
-        };
-
-        Ok(Self {
-            survive: to_rule_array(survive)?,
-            born: to_rule_array(born)?,
-        })
-    }
-}
-
-/// Returns the (width, height) of the given rect
-pub fn rect_dimensions(((x1, y1), (x2, y2)): Rect) -> (i64, i64) {
-    (x2 - x1, y2 - y1)
+        .filter(|&h| h == ALIVE)
+        .count();
+    Handle(rules.execute(e == ALIVE, count) as usize)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::str::FromStr;
+
+    #[test]
+    fn test_rect_intersect() {
+        #[track_caller]
+        fn reflexive(a: Rect, b: Rect, expect: bool) {
+            assert_eq!(rect_intersect(a, b), expect);
+            assert_eq!(rect_intersect(b, a), expect);
+        }
+        reflexive(((-10, -10), (10, 10)), ((-5, -5), (5, 5)), true);
+        reflexive(((-10, -10), (10, 10)), ((0, 0), (5, 5)), true);
+        reflexive(((3, 3), (10, 10)), ((0, 0), (5, 5)), true);
+        reflexive(((7, 7), (10, 10)), ((0, 0), (5, 5)), false);
+        reflexive(((7, 7), (10, 10)), ((0, 0), (5, 5)), false);
+        reflexive(((7, 7), (10, 10)), ((-5, -5), (0, 0)), false);
+        reflexive(((7, 7), (10, 10)), ((-5, -5), (5, 50)), false);
+        reflexive(((0, 0), (10, 10)), ((-5, -5), (5, 50)), true);
+        reflexive(((0, 0), (10, 10)), ((-5, -5), (50, 5)), true);
+
+        reflexive(((0, 0), (10, 10)), ((-5, -5), (-2, 50)), false);
+        reflexive(((0, 0), (10, 10)), ((-5, -5), (50, -2)), false);
+    }
 
     #[test]
     fn test_solve_4x4() {
@@ -590,26 +515,5 @@ mod tests {
             ]
             .map(Handle)
         );
-    }
-
-    #[test]
-    fn test_rect_intersect() {
-        #[track_caller]
-        fn reflexive(a: Rect, b: Rect, expect: bool) {
-            assert_eq!(rect_intersect(a, b), expect);
-            assert_eq!(rect_intersect(b, a), expect);
-        }
-        reflexive(((-10, -10), (10, 10)), ((-5, -5), (5, 5)), true);
-        reflexive(((-10, -10), (10, 10)), ((0, 0), (5, 5)), true);
-        reflexive(((3, 3), (10, 10)), ((0, 0), (5, 5)), true);
-        reflexive(((7, 7), (10, 10)), ((0, 0), (5, 5)), false);
-        reflexive(((7, 7), (10, 10)), ((0, 0), (5, 5)), false);
-        reflexive(((7, 7), (10, 10)), ((-5, -5), (0, 0)), false);
-        reflexive(((7, 7), (10, 10)), ((-5, -5), (5, 50)), false);
-        reflexive(((0, 0), (10, 10)), ((-5, -5), (5, 50)), true);
-        reflexive(((0, 0), (10, 10)), ((-5, -5), (50, 5)), true);
-
-        reflexive(((0, 0), (10, 10)), ((-5, -5), (-2, 50)), false);
-        reflexive(((0, 0), (10, 10)), ((-5, -5), (50, -2)), false);
     }
 }

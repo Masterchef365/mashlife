@@ -2,14 +2,11 @@
 name = "mashlife"
 version = "0.1.0"
 edition = "2021"
-#default-run = "mashlife"
 
 [dependencies]
-anyhow = "1"
-structopt = { version = "0.3", default-features = false }
 zwohash = { version = "0.1.2", default-features = false }
-png = "0.17.2"
+anyhow = "1"
 
-#[profile.release]
-#debug = true
-#lto = true
+[dev-dependencies]
+structopt = { version = "0.3", default-features = false }
+png = "0.17.2"
