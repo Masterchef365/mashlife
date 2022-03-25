@@ -45,9 +45,10 @@ fn main() -> Result<()> {
 fn write_child_graph<W: Write>(life: &HashLife, mut f: W, omit_zeros: bool) -> io::Result<()> {
     writeln!(f, "strict digraph {{")?;
     for (idx, cell) in life.cells().iter().enumerate() {
-        for child in cell.children {
-            if (child.id() == 0) != omit_zeros {
-                writeln!(f, "    {} -> {}", idx, child.id())?;
+        let names = ["TL", "TR", "BL", "BR"];
+        for (child, name) in cell.children.into_iter().zip(names) {
+            if !((child.id() == 0) && omit_zeros) {
+                writeln!(f, "    {} -> {} [label=\"{}\"]", idx, child.id(), name)?;
             }
         }
     }
