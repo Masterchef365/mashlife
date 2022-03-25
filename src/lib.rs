@@ -265,6 +265,10 @@ impl HashLife {
         self.macrocells[idx]
     }
 
+    pub fn cells(&self) -> &[MacroCell] {
+        &self.macrocells
+    }
+
     /// Get the center 4 cells of the given cell
     fn center_passthrough(&mut self, handle: Handle) -> SubCells {
         let [
@@ -505,5 +509,11 @@ mod tests {
             ]
             .map(Handle)
         );
+    }
+}
+
+impl Handle {
+    pub fn id(&self) -> usize {
+        self.0
     }
 }
