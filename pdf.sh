@@ -1,2 +1,2 @@
-cargo run --example dotviz -- $1 | dot -Tpdf > out.pdf
+cargo run --release --example dotviz -- $@ | dot -Tpdf > out.pdf
 

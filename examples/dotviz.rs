@@ -11,6 +11,10 @@ struct Opt {
     /// Load an RLE file
     rle: PathBuf,
 
+    /// Omit zeroes
+    #[structopt(short, long)]
+    no_zeros: bool,
+
     /// Output file path, defaults to stdout
     #[structopt(short, long)]
     out_path: Option<PathBuf>,
@@ -19,16 +23,8 @@ struct Opt {
 fn main() -> Result<()> {
     let args = Opt::from_args();
 
-    let rle_name = args
-        .rle
-        .file_stem()
-        .context("No file step")?
-        .to_str()
-        .context("RLE file not utf-8")?;
-
     // Load RLE
     let (rle, rle_width) = mashlife::io::load_rle(&args.rle).context("Failed to load RLE file")?;
-    let rle_height = rle.len() / rle_width;
 
     let mut life = HashLife::new(Rules::default());
     let n = 20;
@@ -38,19 +34,21 @@ fn main() -> Result<()> {
     life.insert_array(&rle, rle_width, (half_width, half_width), n);
 
     if let Some(out_path) = args.out_path {
-        write_child_graph(&life, BufWriter::new(File::create(out_path)?))?;
+        write_child_graph(&life, BufWriter::new(File::create(out_path)?), args.no_zeros)?;
     } else {
-        write_child_graph(&life, std::io::stdout())?;
+        write_child_graph(&life, std::io::stdout(), args.no_zeros)?;
     }
 
     Ok(())
 }
 
-fn write_child_graph<W: Write>(life: &HashLife, mut f: W) -> io::Result<()> {
+fn write_child_graph<W: Write>(life: &HashLife, mut f: W, omit_zeros: bool) -> io::Result<()> {
     writeln!(f, "strict digraph {{")?;
     for (idx, cell) in life.cells().iter().enumerate() {
         for child in cell.children {
-            writeln!(f, "    {} -> {}", idx, child.id())?;
+            if (child.id() == 0) != omit_zeros {
+                writeln!(f, "    {} -> {}", idx, child.id())?;
+            }
         }
     }
     writeln!(f, "}}")
