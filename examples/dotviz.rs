@@ -29,9 +29,11 @@ fn main() -> Result<()> {
 
     // Load RLE
     let (rle, rle_width) = mashlife::io::load_rle(&args.rle).context("Failed to load RLE file")?;
+    let rle_height = rle.len() / rle_width;
 
     let mut life = HashLife::new(Rules::default());
-    let n = 20;
+    let max_dim = rle_width.max(rle_height);
+    let n = (1. + (max_dim as f32).log2()) as usize;
 
     let half_width = 1 << (n - 1);
 
