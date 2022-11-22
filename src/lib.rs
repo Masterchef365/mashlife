@@ -438,29 +438,20 @@ impl HashLife {
         // New instance
         let mut inst = Self::new(self.rules);
 
-        // Get all relevant indices in sorted order
-        let mut indices: Vec<Handle> = relevant_handles.iter().copied().collect();
-        indices.sort_by_key(|Handle(i)| *i);
-
         // Re-assign indices
         let mut translate = HashMap::new();
         let mut inc = 2;
-        for &i in &indices {
-            // Gaurd against overwriting the original
-            if matches!(i, Handle(0 | 1)) {
-                continue;
-            }
-
+        for &i in &relevant_handles {
             translate.insert(i, Handle(inc));
             inc += 1;
         }
 
-        // Translate macrocells
-        for &i in &indices {
-            if matches!(i, Handle(0 | 1)) {
-                continue;
-            }
+        // Special indices
+        translate.insert(Handle(0), Handle(0));
+        translate.insert(Handle(1), Handle(1));
 
+        // Translate macrocells
+        for &i in &relevant_handles {
             let mut mc = self.macrocell(i);
             mc.children = mc.children.map(|i| translate[&i]);
             inst.macrocells.push(mc);
@@ -474,7 +465,7 @@ impl HashLife {
 
     /// Constructs the set of all sub-handles of the given handle 
     fn recursive_set(&self, handle: Handle, set: &mut HashSet<Handle>) {
-        if set.insert(handle) {
+        if !matches!(handle, Handle(0 | 1)) && set.insert(handle) {
             let mc = self.macrocell(handle);
             for child in mc.children {
                 self.recursive_set(child, set);
