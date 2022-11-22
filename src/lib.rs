@@ -38,7 +38,7 @@ pub struct MacroCell {
 pub struct HashLife {
     /// Mapping from sub-cells to parent cell
     parent_cell: HashMap<SubCells, Handle, ZwoHasher>,
-    /// Array of macrocells (mapping cell idx to 
+    /// Array of macrocells
     macrocells: Vec<MacroCell>,
     /// Mapping from time step and handle to result handle
     result: HashMap<(usize, Handle), Handle, ZwoHasher>,
@@ -68,6 +68,15 @@ impl HashLife {
             ],
             result: Default::default(),
         }
+    }
+
+    /// Estimate of total bytes used (minimum)
+    pub fn mem_usage(&self) -> (usize, usize, usize) {
+        (
+            self.result.len() * std::mem::size_of::<(usize, Handle)>(),
+            self.parent_cell.len() * std::mem::size_of::<(SubCells, Handle)>(),
+            self.macrocells.len() * std::mem::size_of::<MacroCell>(),
+        )
     }
 
     /// Insert the given data with the given width and top-left
