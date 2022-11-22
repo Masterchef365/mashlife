@@ -3,7 +3,7 @@ pub mod geometry;
 mod rules;
 pub use rules::Rules;
 use geometry::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 type ZwoHasher = std::hash::BuildHasherDefault<zwohash::ZwoHasher>;
 
 // TODO: This assumes you are only using one HashLife instance!!!
@@ -429,6 +429,58 @@ impl HashLife {
 
         self.parent([tl, tr, bl, br], cell.n + 1)
     }
+
+
+    pub fn gc(&self, handle: Handle) -> (Self, Handle) {
+        let mut relevant_handles = HashSet::new();
+        self.recursive_set(handle, &mut relevant_handles);
+
+        // New instance
+        let mut inst = Self::new(self.rules);
+
+        // Get all relevant indices in sorted order
+        let mut indices: Vec<Handle> = relevant_handles.iter().copied().collect();
+        indices.sort_by_key(|Handle(i)| *i);
+
+        // Re-assign indices
+        let mut translate = HashMap::new();
+        let mut inc = 2;
+        for &i in &indices {
+            // Gaurd against overwriting the original
+            if matches!(i, Handle(0 | 1)) {
+                continue;
+            }
+
+            translate.insert(i, Handle(inc));
+            inc += 1;
+        }
+
+        // Translate macrocells
+        for &i in &indices {
+            if matches!(i, Handle(0 | 1)) {
+                continue;
+            }
+
+            let mut mc = self.macrocell(i);
+            mc.children = mc.children.map(|i| translate[&i]);
+            inst.macrocells.push(mc);
+        }
+
+        // Translate handle
+        let trans_handle = translate[&handle];
+
+        (inst, trans_handle)
+    }
+
+    /// Constructs the set of all sub-handles of the given handle 
+    fn recursive_set(&self, handle: Handle, set: &mut HashSet<Handle>) {
+        if set.insert(handle) {
+            let mc = self.macrocell(handle);
+            for child in mc.children {
+                self.recursive_set(child, set);
+            }
+        }
+    }
 }
 
 /// Solve a 4x4 grid, represented as four corners of row-major 2x2 grids
@@ -485,34 +537,34 @@ mod tests {
         assert_eq!(
             solve_4x4(
                 [
-                    [
-                        0, 0, //.
-                        1, 0 //.
-                    ]
-                    .map(Handle),
-                    [
-                        1, 0, //.
-                        1, 0, //.
-                    ]
-                    .map(Handle),
+                [
+                0, 0, //.
+                1, 0 //.
+                ]
+                .map(Handle),
+                [
+                1, 0, //.
+                1, 0, //.
+                ]
+                .map(Handle),
+                [
+                0, 1, //.
+                0, 0, //.
+                ]
+                .map(Handle),
+                [
+                1, 0, //.
+                0, 0, //.
+                ]
+                    .map(Handle)
+                    ],
+                    &rules
+                        ),
                     [
                         0, 1, //.
-                        0, 0, //.
+                        1, 1, //.
                     ]
-                    .map(Handle),
-                    [
-                        1, 0, //.
-                        0, 0, //.
-                    ]
-                    .map(Handle)
-                ],
-                &rules
-            ),
-            [
-                0, 1, //.
-                1, 1, //.
-            ]
-            .map(Handle)
-        );
+                        .map(Handle)
+                        );
     }
 }
