@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 zwohash = { version = "0.1.2", default-features = false }
 anyhow = "1"
+lru-cache = "0.1.2"
 
 [dev-dependencies]
 structopt = { version = "0.3", default-features = false }

@@ -1,9 +1,13 @@
 pub mod io;
 pub mod geometry;
 mod rules;
+use lru_cache::LruCache;
 pub use rules::Rules;
 use geometry::*;
 use std::collections::{HashMap, HashSet};
+
+const CACHE_LENGTH: usize = 5_000_000;
+
 type ZwoHasher = std::hash::BuildHasherDefault<zwohash::ZwoHasher>;
 
 // TODO: This assumes you are only using one HashLife instance!!!
@@ -41,7 +45,7 @@ pub struct HashLife {
     /// Array of macrocells
     macrocells: Vec<MacroCell>,
     /// Mapping from time step and handle to result handle
-    result: HashMap<(usize, Handle), Handle, ZwoHasher>,
+    result: LruCache<(usize, Handle), Handle>,
     /// Ruleset
     rules: Rules,
 }
@@ -66,7 +70,7 @@ impl HashLife {
                     children: [INVALID_HANDLE; 4],
                 },
             ],
-            result: Default::default(),
+            result: LruCache::new(CACHE_LENGTH),
         }
     }
 
@@ -180,8 +184,8 @@ impl HashLife {
         assert!(dt <= 1 << cell.n - 2, "dt ({}) must be <= 2^(n - 2), n={}", dt, cell.n);
 
         // Check if we already know the result
-        if let Some(&result) = self.result.get(&(dt, handle)) {
-            return result;
+        if let Some(result) = self.result.get_mut(&(dt, handle)) {
+            return *result;
         }
 
         let (cx, cy) = corner;
@@ -432,6 +436,7 @@ impl HashLife {
 
 
     pub fn gc(&self, handle: Handle) -> (Self, Handle) {
+        /*
         let mut relevant_handles = HashSet::new();
         self.recursive_set(handle, &mut relevant_handles);
 
@@ -459,8 +464,10 @@ impl HashLife {
 
         // Translate handle
         let trans_handle = translate[&handle];
+        */
+        (self.clone(), handle)
 
-        (inst, trans_handle)
+        //(inst, trans_handle)
     }
 
     /// Constructs the set of all sub-handles of the given handle 
