@@ -1,8 +1,8 @@
-pub mod io;
 pub mod geometry;
+pub mod io;
 mod rules;
-pub use rules::Rules;
 use geometry::*;
+pub use rules::Rules;
 use std::collections::{HashMap, HashSet};
 type ZwoHasher = std::hash::BuildHasherDefault<zwohash::ZwoHasher>;
 
@@ -106,7 +106,7 @@ impl HashLife {
         );
         let height = input.len() / width;
 
-         // Calculate input rect
+        // Calculate input rect
         let (left, top) = tl_corner;
         let br_corner = (left + width as i64, top + height as i64);
         let rect = (tl_corner, br_corner);
@@ -117,7 +117,7 @@ impl HashLife {
     /// Insert the given array with dimensions described by input_rect
     /// Positions within the input rect are calculated relative to tl_corner, representing the
     /// top-left corner of the handle in the space of the rect
-    /// n is the 
+    /// n is the
     fn insert_rect(
         &mut self,
         input: &[bool],
@@ -125,7 +125,7 @@ impl HashLife {
         input_rect: Rect,
         n: usize,
     ) -> Handle {
-        if tl_corner.1 + 1 == input_rect.1.1 {
+        if tl_corner.1 + 1 == input_rect.1 .1 {
             return FLOOR;
         }
 
@@ -152,18 +152,11 @@ impl HashLife {
     }
 
     /// Return the parent handle of the given cells, or create a new parent with the given size n
-    fn parent(
-        &mut self,
-        children: SubCells,
-        n: usize,
-    ) -> Handle {
+    fn parent(&mut self, children: SubCells, n: usize) -> Handle {
         match self.parent_cell.get(&children) {
             None => {
                 let idx = self.macrocells.len();
-                self.macrocells.push(MacroCell {
-                    n,
-                    children,
-                });
+                self.macrocells.push(MacroCell { n, children });
                 let handle = Handle(idx);
                 self.parent_cell.insert(children, handle);
                 handle
@@ -188,7 +181,12 @@ impl HashLife {
             "Results can only be computed for 4x4 cells and larger"
         );
 
-        assert!(dt <= 1 << cell.n - 2, "dt ({}) must be <= 2^(n - 2), n={}", dt, cell.n);
+        assert!(
+            dt <= 1 << cell.n - 2,
+            "dt ({}) must be <= 2^(n - 2), n={}",
+            dt,
+            cell.n
+        );
 
         // Check if we already know the result
         if let Some(&result) = self.result.get(&(dt, handle)) {
@@ -229,7 +227,12 @@ impl HashLife {
             let grandchild_width = 1i64 << cell_n - 2; // Width of a grandchild
             let great_grandchild_width = 1i64 << cell_n - 3; // Half the width of a grandchild
 
-            let corner_3x3 = |u, v| (great_grandchild_width + u * grandchild_width + cx, great_grandchild_width + v * grandchild_width + cy);
+            let corner_3x3 = |u, v| {
+                (
+                    great_grandchild_width + u * grandchild_width + cx,
+                    great_grandchild_width + v * grandchild_width + cy,
+                )
+            };
 
             let middle_3x3 = [
                 // Top inner row
@@ -257,7 +260,12 @@ impl HashLife {
             let [q, r, s, t, u, v, w, x, y] =
                 middle_3x3.map(|(coord, handle)| self.result(handle, dt_1, coord));
 
-            let corner_2x2 = |u, v| (grandchild_width + u * grandchild_width + cx, grandchild_width + v * grandchild_width + cy);
+            let corner_2x2 = |u, v| {
+                (
+                    grandchild_width + u * grandchild_width + cx,
+                    grandchild_width + v * grandchild_width + cy,
+                )
+            };
 
             // Get the middle four quadrants of the 3x3 above
             let middle_2x2 = [
@@ -269,8 +277,7 @@ impl HashLife {
             .map(|(coord, subcells)| (coord, self.parent(subcells, cell_n - 1)));
 
             // Compute results or passthroughs for child nodes
-            let result =
-                middle_2x2.map(|(coord, handle)| self.result(handle, dt_2, coord));
+            let result = middle_2x2.map(|(coord, handle)| self.result(handle, dt_2, coord));
 
             // Save the result
             self.parent(result, cell_n - 1)
@@ -357,13 +364,7 @@ impl HashLife {
     /// Returns a new handle with the cell at `coord` set to `value` in `handle`.
     /// If the given cell is empty, return a new cell with the given size `n` at the
     /// corresponding `value` set at `coord`
-    pub fn modify(
-        &mut self,
-        handle: Handle,
-        coord: Coord,
-        value: usize,
-        n: usize,
-    ) -> Handle {
+    pub fn modify(&mut self, handle: Handle, coord: Coord, value: usize, n: usize) -> Handle {
         let cell = self.macrocell(handle);
         let mut children = cell.children;
 
@@ -371,7 +372,7 @@ impl HashLife {
         if handle != DEAD {
             assert_eq!(n, cell.n);
         }
-        
+
         if n == 0 {
             return Handle(value);
         }
@@ -414,29 +415,40 @@ impl HashLife {
 
         let z = DEAD;
 
-        let tl = self.parent([
-            z, z, // 
-            z, tl, // 
-        ], cell.n);
+        let tl = self.parent(
+            [
+                z, z, //
+                z, tl, //
+            ],
+            cell.n,
+        );
 
-        let tr = self.parent([
-            z, z, // 
-            tr, z, // 
-        ], cell.n);
+        let tr = self.parent(
+            [
+                z, z, //
+                tr, z, //
+            ],
+            cell.n,
+        );
 
-        let bl = self.parent([
-            z, bl, // 
-            z, z, // 
-        ], cell.n);
+        let bl = self.parent(
+            [
+                z, bl, //
+                z, z, //
+            ],
+            cell.n,
+        );
 
-        let br = self.parent([
-            br, z, // 
-            z, z, // 
-        ], cell.n);
+        let br = self.parent(
+            [
+                br, z, //
+                z, z, //
+            ],
+            cell.n,
+        );
 
         self.parent([tl, tr, bl, br], cell.n + 1)
     }
-
 
     pub fn gc(&self, handle: Handle) -> (Self, Handle) {
         let mut relevant_handles = HashSet::new();
@@ -470,7 +482,7 @@ impl HashLife {
         (inst, trans_handle)
     }
 
-    /// Constructs the set of all sub-handles of the given handle 
+    /// Constructs the set of all sub-handles of the given handle
     fn recursive_set(&self, handle: Handle, set: &mut HashSet<Handle>) {
         if !matches!(handle, Handle(0 | 1)) && set.insert(handle) {
             let mc = self.macrocell(handle);
@@ -482,40 +494,26 @@ impl HashLife {
 }
 
 fn solve_2x2(cells: SubCells) -> SubCells {
-    const LUT: [[usize; 4]; 16] = [
-        [0, 0, 0, 0], // 0
-        [0, 0, 1, 0], // 1
-        [0, 0, 0, 1], // 2
-        [0, 0, 1, 1], // 3
-        [0, 0, 1, 0], // 4
-        [0, 0, 1, 1], // 5
-        [0, 0, 1, 1], // 6
-        [1, 0, 1, 1], // 7
-        [0, 0, 0, 1], // 8
-        [0, 0, 1, 1], // 9
-        [0, 0, 1, 1], // 10
-        [0, 1, 1, 1], // 11
-        [0, 0, 1, 1], // 12
-        [1, 0, 1, 1], // 13
-        [0, 1, 1, 1], // 14
-        [1, 1, 1, 1]  // 15
-    ];
-
-    let [a, b, c, d] = cells.map(|h| match h {
-        DEAD => 0,
-        ALIVE | FLOOR => 1,
-        _ => unreachable!()
-    });
-    let idx = a * 1 + b * 2 + c * 4 + d * 8;
-
-    let mut out_pattern = LUT[idx];
-    for (o, c) in out_pattern.iter_mut().zip(cells) {
-        if c == FLOOR {
-            *o = FLOOR.0;
-        }
+    match cells.map(|c| c.0) {
+        [0, 0, 0, 0] => [0, 0, 0, 0], // 0
+        [0, 0, 0, 1] => [0, 0, 1, 0], // 1
+        [0, 0, 1, 0] => [0, 0, 0, 1], // 2
+        [0, 0, 1, 1] => [0, 0, 1, 1], // 3
+        [0, 1, 0, 0] => [0, 0, 1, 0], // 4
+        [0, 1, 0, 1] => [0, 0, 1, 1], // 5
+        [0, 1, 1, 0] => [0, 0, 1, 1], // 6
+        [0, 1, 1, 1] => [1, 0, 1, 1], // 7
+        [1, 0, 0, 0] => [0, 0, 0, 1], // 8
+        [1, 0, 0, 1] => [0, 0, 1, 1], // 9
+        [1, 0, 1, 0] => [0, 0, 1, 1], // 10
+        [1, 0, 1, 1] => [0, 1, 1, 1], // 11
+        [1, 1, 0, 0] => [0, 0, 1, 1], // 12
+        [1, 1, 0, 1] => [1, 0, 1, 1], // 13
+        [1, 1, 1, 0] => [0, 1, 1, 1], // 14
+        [1, 1, 1, 1] => [1, 1, 1, 1], // 15
+        _ => [0; 4],
     }
-
-    out_pattern.map(Handle)
+    .map(Handle)
 }
 
 /// Solve a 4x4 grid, represented as four corners of row-major 2x2 grids
@@ -575,34 +573,34 @@ mod tests {
         assert_eq!(
             solve_4x4(
                 [
-                [
-                0, 0, //.
-                1, 0 //.
-                ]
-                .map(Handle),
-                [
-                1, 0, //.
-                1, 0, //.
-                ]
-                .map(Handle),
-                [
-                0, 1, //.
-                0, 0, //.
-                ]
-                .map(Handle),
-                [
-                1, 0, //.
-                0, 0, //.
-                ]
-                    .map(Handle)
-                    ],
-                    &rules
-                        ),
+                    [
+                        0, 0, //.
+                        1, 0 //.
+                    ]
+                    .map(Handle),
+                    [
+                        1, 0, //.
+                        1, 0, //.
+                    ]
+                    .map(Handle),
                     [
                         0, 1, //.
-                        1, 1, //.
+                        0, 0, //.
                     ]
-                        .map(Handle)
-                        );
+                    .map(Handle),
+                    [
+                        1, 0, //.
+                        0, 0, //.
+                    ]
+                    .map(Handle)
+                ],
+                &rules
+            ),
+            [
+                0, 1, //.
+                1, 1, //.
+            ]
+            .map(Handle)
+        );
     }
 }
