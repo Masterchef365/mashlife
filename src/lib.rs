@@ -501,10 +501,21 @@ fn solve_2x2(cells: SubCells) -> SubCells {
         [1, 1, 1, 1]  // 15
     ];
 
-    let [a, b, c, d] = cells.map(|Handle(c)| c);
+    let [a, b, c, d] = cells.map(|h| match h {
+        DEAD => 0,
+        ALIVE | FLOOR => 1,
+        _ => unreachable!()
+    });
     let idx = a * 1 + b * 2 + c * 4 + d * 8;
 
-    LUT[idx].map(Handle)
+    let mut out_pattern = LUT[idx];
+    for (o, c) in out_pattern.iter_mut().zip(cells) {
+        if c == FLOOR {
+            *o = FLOOR.0;
+        }
+    }
+
+    out_pattern.map(Handle)
 }
 
 /// Solve a 4x4 grid, represented as four corners of row-major 2x2 grids
