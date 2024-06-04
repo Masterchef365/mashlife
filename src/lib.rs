@@ -474,17 +474,25 @@ impl HashLife {
     }
 }
 
+fn solve_2x2(cells: SubCells) -> SubCells {
+    assert!(cells.iter().all(|&v| matches!(v, ALIVE | DEAD)));
+    todo!()
+}
+
 /// Solve a 4x4 grid, represented as four corners of row-major 2x2 grids
 fn solve_4x4(
     [[a, b, c, d], [e, f, g, h], [i, j, k, l], [m, n, o, p]]: [SubCells; 4],
     rules: &Rules,
 ) -> SubCells {
+    solve_2x2([d, g, j, m])
+    /*
     [
         solve_3x3([a, b, e, c, d, g, i, j, m], rules),
         solve_3x3([b, e, f, d, g, h, j, m, n], rules),
         solve_3x3([c, d, g, i, j, m, k, l, o], rules),
         solve_3x3([d, g, h, j, m, n, l, o, p], rules),
     ]
+    */
 }
 
 /// Solve a row-major 3x3 grid
