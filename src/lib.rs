@@ -17,6 +17,8 @@ const DEAD: Handle = Handle(0);
 /// Living cell
 const ALIVE: Handle = Handle(1);
 
+const FLOOR: Handle = Handle(2);
+
 /// Handle chosen to panic in debug mode
 const INVALID_HANDLE: Handle = Handle(usize::MAX);
 
@@ -61,6 +63,11 @@ impl HashLife {
                     children: [DEAD; 4],
                 },
                 // Handle(1) is always a single, live cell.
+                MacroCell {
+                    n: 0,
+                    children: [INVALID_HANDLE; 4],
+                },
+                // Handle(2) is always a single, floor cell.
                 MacroCell {
                     n: 0,
                     children: [INVALID_HANDLE; 4],
@@ -118,6 +125,10 @@ impl HashLife {
         input_rect: Rect,
         n: usize,
     ) -> Handle {
+        if tl_corner.1 + 1 == input_rect.1.1 {
+            return FLOOR;
+        }
+
         // Return the input pixel at the given coordinates
         if n == 0 {
             return Handle(
@@ -297,7 +308,7 @@ impl HashLife {
         let (width, height) = rect_dimensions(rect);
         let mut image = vec![false; (width * height) as usize];
 
-        let mut set_pixel = |pos: Coord| {
+        let mut set_pixel = |pos: Coord, _| {
             if let Some(idx) = sample_rect(pos, rect) {
                 image[idx] = true;
             }
@@ -313,7 +324,7 @@ impl HashLife {
     pub fn resolve(
         &self,
         corner: Coord,
-        image: &mut impl FnMut(Coord),
+        image: &mut impl FnMut(Coord, usize),
         min_n: usize,
         rect: Rect,
         handle: Handle,
@@ -335,7 +346,7 @@ impl HashLife {
 
         // If at the base layer, output to the image. Otherwise compute sub-cells
         if cell.n == min_n {
-            image(corner);
+            image(corner, handle.0);
         } else {
             for (sub_corner, node) in subcoords(corner, cell.n - 1).into_iter().zip(cell.children) {
                 self.resolve(sub_corner, image, min_n, rect, node);
@@ -350,7 +361,7 @@ impl HashLife {
         &mut self,
         handle: Handle,
         coord: Coord,
-        value: bool,
+        value: usize,
         n: usize,
     ) -> Handle {
         let cell = self.macrocell(handle);
@@ -362,10 +373,7 @@ impl HashLife {
         }
         
         if n == 0 {
-            return match value {
-                false => DEAD,
-                true => ALIVE,
-            };
+            return Handle(value);
         }
 
         let (idx, subcoord) = Self::child_subcoord_idx(coord, n);
@@ -387,10 +395,9 @@ impl HashLife {
     }
 
     /// Read a single cell at the given coordinates
-    pub fn read(&self, handle: Handle, coord: Coord) -> bool {
+    pub fn read(&self, handle: Handle, coord: Coord) -> usize {
         match handle {
-            DEAD => return false,
-            ALIVE => return true,
+            DEAD | ALIVE | FLOOR => return handle.0,
             other => {
                 let cell = self.macrocell(other);
                 let (idx, subcoord) = Self::child_subcoord_idx(coord, cell.n);
