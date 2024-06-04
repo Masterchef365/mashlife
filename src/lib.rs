@@ -475,8 +475,29 @@ impl HashLife {
 }
 
 fn solve_2x2(cells: SubCells) -> SubCells {
-    assert!(cells.iter().all(|&v| matches!(v, ALIVE | DEAD)));
-    todo!()
+    const LUT: [[usize; 4]; 16] = [
+        [0, 0, 0, 0], // 0
+        [0, 0, 1, 0], // 1
+        [0, 0, 0, 1], // 2
+        [0, 0, 1, 1], // 3
+        [0, 0, 1, 0], // 4
+        [0, 0, 1, 1], // 5
+        [0, 0, 1, 1], // 6
+        [1, 0, 1, 1], // 7
+        [0, 0, 0, 1], // 8
+        [0, 0, 1, 1], // 9
+        [0, 0, 1, 1], // 10
+        [0, 1, 1, 1], // 11
+        [0, 0, 1, 1], // 12
+        [1, 0, 1, 1], // 13
+        [0, 1, 1, 1], // 14
+        [1, 1, 1, 1]  // 15
+    ];
+
+    let [a, b, c, d] = cells.map(|Handle(c)| c);
+    let idx = a * 1 + b * 2 + c * 4 + d * 8;
+
+    LUT[idx].map(Handle)
 }
 
 /// Solve a 4x4 grid, represented as four corners of row-major 2x2 grids
