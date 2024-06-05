@@ -4,7 +4,8 @@ mod rules;
 pub use rules::Rules;
 use geometry::*;
 use std::collections::{HashMap, HashSet};
-type ZwoHasher = std::hash::BuildHasherDefault<zwohash::ZwoHasher>;
+//type ZwoHasher = std::hash::BuildHasherDefault<zwohash::ZwoHasher>;
+type ZwoHasher = std::hash::BuildHasherDefault<std::hash::DefaultHasher>;
 
 // TODO: This assumes you are only using one HashLife instance!!!
 /// Handle representing a macrocell
@@ -276,6 +277,10 @@ impl HashLife {
 
     pub fn macrocells(&self) -> &[MacroCell] {
         &self.macrocells
+    }
+
+    pub fn results(&self) -> impl Iterator<Item=(&(usize, Handle), &Handle)> + '_ {
+        self.result.iter()
     }
 
     /// Get the center 4 cells of the given cell
